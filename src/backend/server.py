@@ -1,12 +1,12 @@
-import os
+import logging
 from fastapi import FastAPI, Response, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from typing import Optional
-import random, string, time
 
 
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-print("Started the server")
+logger.info("Started the server")
 app = FastAPI()
 
 # def versus async def
@@ -27,5 +27,10 @@ app.add_middleware(
 @app.get("/")
 async def root():
     return {"message": "Hello World!"}
+
+@app.get("/api/v1/health")
+async def health_check():
+    logger.info("Request at health check endpoint")
+    return {"status": "OK"}
 
 
