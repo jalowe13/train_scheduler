@@ -5,8 +5,14 @@ import type { TimePickerProps } from "antd";
 import { apiService } from "./ApiService.tsx";
 import { Form, Input, Button, TimePicker } from "antd";
 
+// Interface for the POST data that can be sent
+interface PostData {
+  title: string;
+  content: string;
+}
+
 // Interface for the props of the NewTrainServiceForm component
-// Function prop that takes apiFunction as an argument and
+// Function prop that takes apiFunction as an argument with PostData as an argument
 // returns a Promise of any type, but the function itself
 //  doesnt return anything
 interface NewTrainServiceFormProps {
@@ -43,7 +49,10 @@ const NewTrainServiceForm: React.FC<NewTrainServiceFormProps> = ({
   //   console.log("Submitting:", values);
   //   // POST request to API
   // };
-
+  const postData: PostData = {
+    title: "New Train Line Schedule",
+    content: "This is a new train line schedule",
+  };
   return (
     <Form layout={"horizontal"} style={{ maxWidth: 600 }}>
       <h1> New Train Line Schedule</h1>
@@ -67,7 +76,9 @@ const NewTrainServiceForm: React.FC<NewTrainServiceFormProps> = ({
         <Button
           type="primary"
           // apiService.healthCheck isnt called until the button is clicked
-          onClick={() => handleButtonClick(apiService.healthCheck)}
+          onClick={() =>
+            handleButtonClick(() => apiService.submitForm(postData))
+          }
         >
           Submit
         </Button>

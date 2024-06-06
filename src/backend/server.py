@@ -1,6 +1,7 @@
 import logging
 from fastapi import FastAPI, Response, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel # Types checking in python
 
 
 logging.basicConfig(level=logging.INFO)
@@ -24,6 +25,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+class Post(BaseModel):
+    title: str
+    content: str
+
 @app.get("/")
 async def root():
     return {"message": "Hello World!"}
@@ -33,9 +38,11 @@ async def health_check():
     logger.info("Request at health check endpoint")
     return {"status": "OK"}
 
-@app.get("/api/v1/submit")
-async def submit():
-    logger.info("Request at submit endpoint")
-    return {"status": "OK"}
+@app.post("/api/v1/posts")
+async def create_post(post: Post):
+    logger.info(f"Request to create a new post with title: {post.title}")
+    # post_id = db.insert(post)
+    # return {"id": post_id, **post.dict()}
+    return {"id": 1, "title": post.title, "content": post.content}
 
 
