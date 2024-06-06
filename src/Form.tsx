@@ -2,9 +2,20 @@
 // Jacob Lowe
 import React, { useState, useEffect } from "react";
 import type { TimePickerProps } from "antd";
+import { apiService } from "./ApiService.tsx";
 import { Form, Input, Button, TimePicker } from "antd";
 
-const NewTrainServiceForm: React.FC = () => {
+// Interface for the props of the NewTrainServiceForm component
+// Function prop that takes apiFunction as an argument and
+// returns a Promise of any type, but the function itself
+//  doesnt return anything
+interface NewTrainServiceFormProps {
+  handleButtonClick: (apiFunction: () => Promise<any>) => void;
+}
+
+const NewTrainServiceForm: React.FC<NewTrainServiceFormProps> = ({
+  handleButtonClick,
+}) => {
   const [times, setTimes] = useState<string[]>([]);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
 
@@ -28,13 +39,14 @@ const NewTrainServiceForm: React.FC = () => {
     }
   };
   // Submit to the API on Click of the submit button
-  const onFinish = (values: any) => {
-    console.log("Submitting:", values);
-    // POST request to API
-  };
+  // const onFinish = (values: any) => {
+  //   console.log("Submitting:", values);
+  //   // POST request to API
+  // };
 
   return (
     <Form layout={"horizontal"} style={{ maxWidth: 600 }}>
+      <h1> New Train Line Schedule</h1>
       <Form.Item label="Name">
         <Input placeholder="input placeholder" />
       </Form.Item>
@@ -52,7 +64,11 @@ const NewTrainServiceForm: React.FC = () => {
         <Button type="primary" onClick={onAdd}>
           Add time
         </Button>
-        <Button type="primary" onClick={onFinish}>
+        <Button
+          type="primary"
+          // apiService.healthCheck isnt called until the button is clicked
+          onClick={() => handleButtonClick(apiService.healthCheck)}
+        >
           Submit
         </Button>
       </Form.Item>
