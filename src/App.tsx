@@ -1,6 +1,10 @@
 import "./App.css";
 import React, { useCallback } from "react";
 import { Button } from "antd";
+import NewTrainServiceForm from "./Form.tsx";
+
+// Train Line App
+// Jacob Lowe
 
 // This object contains functions that make requests to the API
 const apiService = {
@@ -33,11 +37,13 @@ const App: React.FC = () => {
     } else {
       console.error("Failed to fetch health check data");
     }
-  }, []); // The array is the dependency list for the callback that holds all variables it depends on
+  }, []); // The array is the dependency list for the callback that holds
+  //all variables it depends on
   return (
     <div className="App">
       <header className="App-header">
-        <p>Train Scheduler</p>
+        <h1> New Train Line Schedule</h1>
+        <NewTrainServiceForm />
         <Button onClick={() => handleButtonClick()}>Health Check</Button>
       </header>
     </div>

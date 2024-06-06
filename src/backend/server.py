@@ -33,4 +33,9 @@ async def health_check():
     logger.info("Request at health check endpoint")
     return {"status": "OK"}
 
+@app.get("/api/v1/submit")
+async def submit():
+    logger.info("Request at submit endpoint")
+    return {"status": "OK"}
+
 

@@ -23,3 +23,4 @@ yarn-debug.log*
 yarn-error.log*
 /src/backend/__pycache__
 src/backend/__pycache__/server.cpython-311.pyc
+*.pyc

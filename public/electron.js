@@ -105,7 +105,7 @@ function createWindow() {
     `);
     });
     win.once("ready-to-show", () => {
-      win.setTitle("PassNow");
+      win.setTitle("Train Line - Parq");
       win.maximize();
       win.show();
       // Get the child processes of the frontend
