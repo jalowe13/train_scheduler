@@ -15,7 +15,7 @@ async function postAPI(endpoint: string, body = null, options = {}) {
     "AND OPTIONS:",
     options
   );
-  console.log(`FETCHING ${url}${api_version}${endpoint}`);
+  console.log(`POSTING ${url}${api_version}${endpoint}`);
   try {
     const response = await fetch(`${url}${api_version}${endpoint}`, {
       method: "POST",
