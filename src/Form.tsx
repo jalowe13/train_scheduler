@@ -23,8 +23,8 @@ interface NewTrainServiceFormProps {
 const NewTrainServiceForm: React.FC<NewTrainServiceFormProps> = ({
   handleButtonClick,
 }) => {
-  const [times, setTimes] = useState<string[]>([]);
-  const [selectedTime, setSelectedTime] = useState<string | null>(null);
+  const [times, setTimes] = useState<string[]>([]); // List of times
+  const [selectedTime, setSelectedTime] = useState<string | null>(null); // Currently selected time
   const [postData, setPostData] = useState<PostData>({
     train_name: "UNKNOWN TRAIN LINE",
     arrival_time: [],
@@ -52,7 +52,7 @@ const NewTrainServiceForm: React.FC<NewTrainServiceFormProps> = ({
   };
   // Function to handle the onAdd button click and add the selected time to the times array
   const onAdd = (values: any) => {
-    if (selectedTime) {
+    if (selectedTime && !times.includes(selectedTime)) {
       console.log("Adding:", values);
       setTimes((prevTimes) => [...prevTimes, selectedTime]);
     }

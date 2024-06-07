@@ -1,9 +1,12 @@
 import logging
+import boto3
 from typing import List
-from fastapi import FastAPI, Response, Request, HTTPException
+from fastapi import FastAPI, Response, Request, HTTPException, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel # Types checking in python
 
+# Backend Server for the Train Schedule App
+# Jacob Lowe
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -22,19 +25,28 @@ app.add_middleware(
     allow_headers=["*"], # Accept, Content-Type, Authorization
 )
 
+# Helper functions
+def check_time_format(time: str):
+    logger.info(f"Checking time: {time}")
+    if len(time) != 8 and len(time) != 7:
+        raise HTTPException(status_code=400, 
+                            detail="Invalid time format: length")
+    if ":" not in time:
+        raise HTTPException(status_code=400, 
+                            detail="Invalid time format: missing :")
+    
+# REST API for GET and POST requests
 class Post(BaseModel):
     train_name: str
     arrival_time: List[str]
 
-@app.get("/")
-async def root():
-    return {"message": "Hello World!"}
-
+# GET request to check if the server is running
 @app.get("/api/v1/health")
 async def health_check():
     logger.info("Request at health check endpoint")
     return {"status": "OK"}
 
+# POST request to create a new train post schedule
 @app.post("/api/v1/posts")
 async def create_post(post: Post):
     logger.info(f"Request to create a new post with title: {post.train_name}")
@@ -43,14 +55,16 @@ async def create_post(post: Post):
     if (len(post.arrival_time) == 0):
         raise HTTPException(status_code=400, detail="No arrival times provided")
     for time in post.arrival_time:
-        logger.info(f"Checking time: {time}")
-        if len(time) != 8 and len(time) != 7:
-            raise HTTPException(status_code=400, 
-                                detail="Invalid time format: length")
-        if ":" not in time:
-            raise HTTPException(status_code=400, 
-                                detail="Invalid time format: missing :")
+       check_time_format(time) 
     return {"id": 1, "train_name": post.train_name,
              "arrival_time": post.arrival_time}
+@app.get("api/v1/get_train_schedule")
 
+# Websockets for real-time updates on cached data from REST GET requests
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    await websocket.accept()
+    while True:
+        data = await websocket.receive_text()
+        await websocket.send_text(f"Message text was: {data}")
 
