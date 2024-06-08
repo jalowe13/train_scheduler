@@ -1,18 +1,53 @@
 import logging
 import boto3
+import typing
+import strawberry
 from typing import List
-from fastapi import FastAPI, Response, Request, HTTPException, WebSocket
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel # Types checking in python
+from strawberry.fastapi import GraphQLRouter
 
 # Backend Server for the Train Schedule App
 # Jacob Lowe
+# This file is the backend server that shows both REST and GraphQL APIs
 
+# Setting up the logger
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
 logger.info("Started the server")
+logger.info("You can access strawberry GraphQL playground at http://127.0.0.1:8080/graphql")
+# Setting up the FastAPI app
 app = FastAPI()
+# GraphQL API for the Train Schedule App
+# Function to get the train
+def get_trains():
+    return [
+        Train(
+            train_name="DSFF",
+            arrival_time=["12:00 PM", "11:00 AM"],
+        ),
+        Train(
+            train_name="GFAE",
+            arrival_time=["11:00 PM", "11:57 AM"],
+        )
+    ]
+
+# Defining the Train and Query classes
+@strawberry.type
+class Train:
+    train_name: str
+    arrival_time: List[str]
+
+
+@strawberry.type
+class Query:
+    trains: typing.List[Train] = strawberry.field(resolver=get_trains)
+
+# Setting up the GraphQL schema
+schema = strawberry.Schema(Query)
+graphql_app = GraphQLRouter(schema)
+app.include_router(graphql_app, prefix="/graphql")
 
 
 # Setting up CORS middleware for information being able to be
@@ -58,13 +93,5 @@ async def create_post(post: Post):
        check_time_format(time) 
     return {"id": 1, "train_name": post.train_name,
              "arrival_time": post.arrival_time}
-@app.get("api/v1/get_train_schedule")
 
-# Websockets for real-time updates on cached data from REST GET requests
-@app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
-    await websocket.accept()
-    while True:
-        data = await websocket.receive_text()
-        await websocket.send_text(f"Message text was: {data}")
 
