@@ -61,6 +61,16 @@ app.add_middleware(
 )
 
 # Helper functions
+def check_name_format(name: str):
+    logger.info(f"Checking name: {name}")
+    if len(name) < 3:
+        raise HTTPException(status_code=400, 
+                            detail="Invalid name format: length")
+    if not name.isalnum():
+        raise HTTPException(status_code=400, 
+                            detail="Invalid name format: not alpha")
+
+# Function to check the time format
 def check_time_format(time: str):
     logger.info(f"Checking time: {time}")
     if len(time) != 8 and len(time) != 7:
@@ -85,6 +95,7 @@ async def health_check():
 @app.post("/api/v1/posts")
 async def create_post(post: Post):
     logger.info(f"Request to create a new post with title: {post.train_name}")
+    check_name_format(post.train_name)
     # post_id = db.insert(post)
     # return {"id": post_id, **post.dict()}
     if (len(post.arrival_time) == 0):

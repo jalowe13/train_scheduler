@@ -1,6 +1,6 @@
 import "./App.css";
 import React, { useCallback } from "react";
-import { Button } from "antd";
+import { Button, message } from "antd";
 import { apiService } from "./ApiService.tsx";
 import NewTrainServiceForm from "./Form.tsx";
 import RequestSchedule from "./RequestSchedule.tsx";
@@ -9,6 +9,11 @@ import RequestSchedule from "./RequestSchedule.tsx";
 // Jacob Lowe
 
 const App: React.FC = () => {
+  // Message State
+  const [messageApi, contextHolder] = message.useMessage();
+  const info = () => {
+    messageApi.info("Request Submitted");
+  };
   // Button click event handler
   const handleButtonClick = useCallback(
     async (apiFunction: () => Promise<any>) => {
@@ -25,7 +30,11 @@ const App: React.FC = () => {
   return (
     <div className="App">
       <header className="App-header">
-        <NewTrainServiceForm handleButtonClick={handleButtonClick} />
+        {contextHolder}
+        <NewTrainServiceForm
+          handleButtonClick={handleButtonClick}
+          info={info}
+        />
         <RequestSchedule />
         <div>
           <Button onClick={() => handleButtonClick(apiService.healthCheck)}>

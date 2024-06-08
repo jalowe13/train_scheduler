@@ -2,6 +2,7 @@
 // Jacob Lowe
 import React, { useState, useEffect } from "react";
 import type { TimePickerProps } from "antd";
+import dayjs from "dayjs";
 import { apiService } from "./ApiService.tsx";
 import { Form, Input, Button, TimePicker } from "antd";
 import { DeleteOutlined } from "@ant-design/icons";
@@ -18,36 +19,43 @@ interface PostData {
 //  doesnt return anything
 interface NewTrainServiceFormProps {
   handleButtonClick: (apiFunction: () => Promise<any>) => void;
+  info: () => void;
 }
 
 const NewTrainServiceForm: React.FC<NewTrainServiceFormProps> = ({
   handleButtonClick,
+  info,
 }) => {
+  // States
+  // Times
   const [times, setTimes] = useState<string[]>([]); // List of times
   const [selectedTime, setSelectedTime] = useState<string | null>(null); // Currently selected time
+  // Train Name
+  const [name, setName] = useState("");
+  // PostData state
   const [postData, setPostData] = useState<PostData>({
     train_name: "UNKNOWN TRAIN LINE",
     arrival_time: [],
   });
 
-  const [name, setName] = useState("");
-
-  // Every time the times array changes update the postData arrival_time
+  // Every time the name or times changes update the postData arrival_time
   useEffect(() => {
-    setPostData({ train_name: "ALP5", arrival_time: times });
-  }, [times]);
+    setPostData({ train_name: name, arrival_time: times });
+  }, [name, times]);
   // Log every time the times array changes
   useEffect(() => {
-    console.log("Times:", times);
-  }, [times]);
+    console.log(postData);
+  }, [postData]);
 
   // Every time times changes change the postData arrival_time
 
   // Function to handle the time picker on change and set the current selected time
-  const onChange: TimePickerProps["onChange"] = (time, timeString) => {
-    if (typeof timeString === "string") {
-      setSelectedTime(timeString);
-      console.log("Time String:", timeString);
+  const onChange: TimePickerProps["onChange"] = (time) => {
+    if (time) {
+      setSelectedTime(time.format("h:mm A"));
+      console.log("Time String:", time.format("h:mm A"));
+    } else {
+      setSelectedTime(null);
     }
   };
   // Function to handle the onAdd button click and add the selected time to the times array
@@ -69,7 +77,6 @@ const NewTrainServiceForm: React.FC<NewTrainServiceFormProps> = ({
       <Form.Item label="Name">
         <Input
           style={{ width: "8ch" }}
-          placeholder="input placeholder"
           maxLength={4}
           value={name}
           onChange={(e) => setName(e.target.value.toUpperCase())}
@@ -77,9 +84,10 @@ const NewTrainServiceForm: React.FC<NewTrainServiceFormProps> = ({
       </Form.Item>
       <Form.Item label="New Time">
         <TimePicker
-          style={{ width: "14ch" }}
+          style={{ width: "16ch" }}
           use12Hours
           format="h:mm A"
+          value={selectedTime ? dayjs(selectedTime, "h:mm A") : null}
           onChange={onChange}
         />
         ;
@@ -111,9 +119,13 @@ const NewTrainServiceForm: React.FC<NewTrainServiceFormProps> = ({
         <Button
           type="primary"
           // apiService.healthCheck isnt called until the button is clicked
-          onClick={() =>
-            handleButtonClick(() => apiService.submitForm(postData))
-          }
+          onClick={() => {
+            info();
+            handleButtonClick(() => apiService.submitForm(postData));
+            setSelectedTime(null);
+            setTimes([]);
+            setName("");
+          }}
         >
           Submit
         </Button>
