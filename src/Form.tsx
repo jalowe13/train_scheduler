@@ -20,11 +20,13 @@ interface PostData {
 interface NewTrainServiceFormProps {
   handleButtonClick: (apiFunction: () => Promise<any>) => void;
   info: () => void;
+  isGraphQL: boolean;
 }
 
 const NewTrainServiceForm: React.FC<NewTrainServiceFormProps> = ({
   handleButtonClick,
   info,
+  isGraphQL,
 }) => {
   // States
   // Times
@@ -76,7 +78,7 @@ const NewTrainServiceForm: React.FC<NewTrainServiceFormProps> = ({
       <h1> New Train Line Schedule</h1>
       <Form.Item label="Name">
         <Input
-          style={{ width: "8ch" }}
+          style={{ width: "9ch" }}
           maxLength={4}
           value={name}
           onChange={(e) => setName(e.target.value.toUpperCase())}
@@ -121,7 +123,7 @@ const NewTrainServiceForm: React.FC<NewTrainServiceFormProps> = ({
           // apiService.healthCheck isnt called until the button is clicked
           onClick={() => {
             info();
-            handleButtonClick(() => apiService.submitForm(postData));
+            handleButtonClick(() => apiService.submitForm(isGraphQL, postData));
             setSelectedTime(null);
             setTimes([]);
             setName("");

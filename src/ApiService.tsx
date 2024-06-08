@@ -5,6 +5,17 @@
 const url: string = "http://127.0.0.1:8080";
 const api_version: string = "/api/v1/";
 
+// GraphQL API Functions
+// Health Check for the GraphQL API
+async function healthCheckGraphQL() {
+  return null;
+}
+// Post to the GraphQL API
+async function postGraphQL(endpoint: string, data: any) {
+  console.log("[GRAPHQL] POSTING TO ENDPOINT:", endpoint, "WITH DATA:", data);
+  return null;
+}
+// REST API Functions
 // Generalized funciton to make POST requests to the API (DRY method)
 async function postAPI(endpoint: string, body = null, options = {}) {
   console.log(
@@ -51,11 +62,17 @@ async function fetchAPI(endpoint: string, options = {}) {
 }
 
 export const apiService = {
-  // This function makes a request to the health check endpoint
-  healthCheck() {
-    return fetchAPI("health");
+  healthCheck(isGraphQL: boolean) {
+    if (isGraphQL) {
+      return healthCheckGraphQL();
+    } else {
+      return fetchAPI("health");
+    }
   },
-  submitForm(data: any) {
+  submitForm(isGraphQL: boolean, data: any) {
+    if (isGraphQL) {
+      return postGraphQL("posts", data);
+    }
     return postAPI("posts", data);
   },
 };

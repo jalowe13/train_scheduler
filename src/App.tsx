@@ -1,6 +1,6 @@
 import "./App.css";
-import React, { useCallback } from "react";
-import { Button, message } from "antd";
+import React, { useCallback, useState } from "react";
+import { Button, Switch, message } from "antd";
 import { apiService } from "./ApiService.tsx";
 import NewTrainServiceForm from "./Form.tsx";
 import RequestSchedule from "./RequestSchedule.tsx";
@@ -9,6 +9,8 @@ import RequestSchedule from "./RequestSchedule.tsx";
 // Jacob Lowe
 
 const App: React.FC = () => {
+  // API Service State
+  const [isGraphQL, setIsGraphQL] = useState(true);
   // Message State
   const [messageApi, contextHolder] = message.useMessage();
   const info = () => {
@@ -16,16 +18,17 @@ const App: React.FC = () => {
   };
   // Button click event handler
   const handleButtonClick = useCallback(
-    async (apiFunction: () => Promise<any>) => {
+    async (apiFunction: (isGraphQL: boolean) => Promise<any>) => {
       console.log(`Button clicked!`);
+      console.log(`GraphQL: ${isGraphQL}`);
       try {
-        const data = await apiFunction();
+        const data = await apiFunction(isGraphQL);
         console.log(data);
       } catch (error) {
         console.error(`Failed to fetch data`, error);
       }
     },
-    [] // The array is the dependency list for the callback that holds all variables it depends on
+    [isGraphQL] // The array is the dependency list for the callback that holds all variables it depends on
   );
   return (
     <div className="App">
@@ -34,9 +37,18 @@ const App: React.FC = () => {
         <NewTrainServiceForm
           handleButtonClick={handleButtonClick}
           info={info}
+          isGraphQL={isGraphQL}
         />
         <RequestSchedule />
         <div>
+          <h4>API Type</h4>
+          <Switch
+            checkedChildren="GraphQL"
+            unCheckedChildren="REST"
+            defaultChecked
+            onChange={(checked) => setIsGraphQL(checked)}
+          />
+          <h5>Debug</h5>
           <Button onClick={() => handleButtonClick(apiService.healthCheck)}>
             Health Check
           </Button>
