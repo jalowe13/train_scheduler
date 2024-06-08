@@ -23,7 +23,7 @@ const App: React.FC = () => {
       console.log(`GraphQL: ${isGraphQL}`);
       try {
         const data = await apiFunction(isGraphQL);
-        console.log(data);
+        console.log("Api data:", data);
       } catch (error) {
         console.error(`Failed to fetch data`, error);
       }

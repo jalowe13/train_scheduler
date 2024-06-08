@@ -45,9 +45,9 @@ const NewTrainServiceForm: React.FC<NewTrainServiceFormProps> = ({
     setPostData({ train_name: name, arrival_time: times });
   }, [name, times]);
   // Log every time the times array changes
-  useEffect(() => {
-    console.log(postData);
-  }, [postData]);
+  // useEffect(() => {
+  //   console.log(postData);
+  // }, [postData]);
 
   // Every time times changes change the postData arrival_time
 
@@ -55,7 +55,6 @@ const NewTrainServiceForm: React.FC<NewTrainServiceFormProps> = ({
   const onChange: TimePickerProps["onChange"] = (time) => {
     if (time) {
       setSelectedTime(time.format("h:mm A"));
-      console.log("Time String:", time.format("h:mm A"));
     } else {
       setSelectedTime(null);
     }
@@ -67,6 +66,16 @@ const NewTrainServiceForm: React.FC<NewTrainServiceFormProps> = ({
       setTimes((prevTimes) => [...prevTimes, selectedTime]);
     }
   };
+
+  // Handle Submission of Form Data on Click if it is REST or GraphQL
+  const handleSubmit = () => {
+    info();
+    handleButtonClick(() => apiService.submitForm(isGraphQL, postData));
+    setSelectedTime(null);
+    setTimes([]);
+    setName("");
+  };
+
   // Submit to the API on Click of the submit button
   // const onFinish = (values: any) => {
   //   console.log("Submitting:", values);
@@ -122,11 +131,7 @@ const NewTrainServiceForm: React.FC<NewTrainServiceFormProps> = ({
           type="primary"
           // apiService.healthCheck isnt called until the button is clicked
           onClick={() => {
-            info();
-            handleButtonClick(() => apiService.submitForm(isGraphQL, postData));
-            setSelectedTime(null);
-            setTimes([]);
-            setName("");
+            handleSubmit();
           }}
         >
           Submit

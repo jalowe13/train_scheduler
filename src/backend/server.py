@@ -21,44 +21,7 @@ logger.info("You can access strawberry GraphQL playground at http://127.0.0.1:80
 app = FastAPI()
 # GraphQL API for the Train Schedule App
 # Function to get the train
-def get_trains():
-    return [
-        Train(
-            train_name="DSFF",
-            arrival_time=["12:00 PM", "11:00 AM"],
-        ),
-        Train(
-            train_name="GFAE",
-            arrival_time=["11:00 PM", "11:57 AM"],
-        )
-    ]
 
-# Defining the Train and Query classes
-@strawberry.type
-class Train:
-    train_name: str
-    arrival_time: List[str]
-
-
-@strawberry.type
-class Query:
-    trains: typing.List[Train] = strawberry.field(resolver=get_trains)
-
-# Setting up the GraphQL schema
-schema = strawberry.Schema(Query)
-graphql_app = GraphQLRouter(schema)
-app.include_router(graphql_app, prefix="/graphql")
-
-
-# Setting up CORS middleware for information being able to be
-# accessed from the frontend
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"], # Production needs actual domains
-    allow_credentials=True,
-    allow_methods=["*"], # GET, POST, PUT, DELETE, OPTIONS
-    allow_headers=["*"], # Accept, Content-Type, Authorization
-)
 
 # Helper functions
 def check_name_format(name: str):
@@ -79,6 +42,61 @@ def check_time_format(time: str):
     if ":" not in time:
         raise HTTPException(status_code=400, 
                             detail="Invalid time format: missing :")
+    
+    
+def get_trains():
+    return [
+        Train(
+            train_name="DSFF",
+            arrival_time=["12:00 PM", "11:00 AM"],
+        ),
+        Train(
+            train_name="GFAE",
+            arrival_time=["11:00 PM", "11:57 AM"],
+        )
+    ]
+
+# Defining the Train and Query classes
+@strawberry.type
+class Train:
+    train_name: str
+    arrival_time: List[str]
+
+@strawberry.type
+class Query:
+    trains: typing.List[Train] = strawberry.field(resolver=get_trains)
+
+@strawberry.type
+class Mutation:
+    @strawberry.mutation
+    def add_train(self, train_name: str, arrival_time: List[str]) -> Train:
+        if (len(arrival_time) == 0):
+            logger.info("No arrival times provided!!!!!!!!!!!!!!!!!!!!!")
+            raise HTTPException(status_code=400, detail="No arrival times provided")
+        check_name_format(train_name)
+        for time in arrival_time:
+            check_time_format(time)
+        print(f"Adding train: {train_name}")
+        return Train(train_name=train_name, arrival_time=arrival_time)
+
+
+# Setting up the GraphQL schema
+schema = strawberry.Schema(query=Query, mutation=Mutation)
+graphql_app = GraphQLRouter(schema)
+app.include_router(graphql_app, prefix="/graphql")
+
+
+# Setting up CORS middleware for information being able to be
+# accessed from the frontend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"], # Production needs actual domains
+    allow_credentials=True,
+    allow_methods=["*"], # GET, POST, PUT, DELETE, OPTIONS
+    allow_headers=["*"], # Accept, Content-Type, Authorization
+)
+
+
     
 # REST API for GET and POST requests
 class Post(BaseModel):
