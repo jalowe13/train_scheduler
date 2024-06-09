@@ -2,6 +2,7 @@ import logging
 import psycopg2
 import typing
 import strawberry
+import threading
 from typing import List
 from datetime import datetime
 from fastapi import FastAPI, HTTPException
@@ -12,6 +13,31 @@ from strawberry.fastapi import GraphQLRouter
 # Backend Server for the Train Schedule App
 # Jacob Lowe
 # This file is the backend server that shows both REST and GraphQL APIs
+
+# Included is a hypothetical key value store database for the train schedule
+# But it is imporantly used as a cache for the train schedule data
+class KeyValueStore:
+    def __init__(self):
+        self.store = {}
+        self.lock = threading.Lock()
+
+    def set(self, train_name, arrival_times):
+        with self.lock:
+            logging.info(f"Setting value for {train_name}: {arrival_times}")
+            self.store[train_name] = list(arrival_times)
+
+    def fetch(self, train_name):
+        with self.lock:
+            logging.info(f"Fetching value for {train_name}")
+            value = self.store.get(train_name)
+            logging.info(f"Value: {value}")
+            return value
+    def keys(self):
+        with self.lock:
+            logging.info(f"Fetching keys")
+            logging.info(f"Keys: {list(self.store.keys())}")
+            return list(self.store.keys())
+
 
 # Setting up the logger
 logging.basicConfig(level=logging.INFO)
@@ -108,7 +134,7 @@ if db is not None:
 else:
     print("Failed to connect to the database")
 
-
+kvs = KeyValueStore()
 
 
 # Helper functions
@@ -171,6 +197,8 @@ class Mutation:
         logger.info("Adding train to the database")
         current_date = datetime.now().strftime('%Y-%m-%d')
         total_rows_inserted = 0 # Total rows inserted
+        # Fetch existing arrival times for the train
+        existing_times = kvs.fetch(train_name) or []
         for time in arrival_time:
             logger.info(f"arrival_time: {time}")
             arrival_time_24h = datetime.strptime(time, '%I:%M %p').strftime('%H:%M:%S')
@@ -181,12 +209,19 @@ class Mutation:
                 INSERT INTO {DB_NAME} ({TIME_COLUMN}, {TRAIN_NAME_COLUMN}, {ARRIVAL_TIME_COLUMN}) 
                 VALUES (NOW(), '{train_name}', '{arrival_timestamp}');
                 """)
-            total_rows_inserted += 1
             select_name_time(cursor)
+            # Append new time
+            existing_times.append(arrival_timestamp)
+            total_rows_inserted += 1
+        # Store updated list
+        # NOTE: The cache is actually used for fetch operations to speed up by
+        # fetching names at a specific time. Not for these mutation/post operations
+        kvs.set(train_name, existing_times)
+        # These are for logging data
+        kvs.fetch(train_name)
+        kvs.keys()
+        # End logging data
         print(f"Total rows inserted: {total_rows_inserted}")
-
-        # TODO: Add the commited train to the database
-        # db.commit()
 
         return Train(train_name=train_name, arrival_time=arrival_time)
 
