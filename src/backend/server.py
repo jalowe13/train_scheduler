@@ -3,6 +3,7 @@ import psycopg2
 import typing
 import strawberry
 from typing import List
+from datetime import datetime
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel # Types checking in python
@@ -22,9 +23,18 @@ app = FastAPI()
 
 # Helper functions for database connection
 def print_fetch(cursor):
-    rows = cursor.fetchall()
-    for row in rows:
-        logger.info(row)
+    if cursor.description is not None:  # Check if there are results to fetch
+        rows = cursor.fetchall()
+        for row in rows:
+            print(row)
+    else:
+        print("No results to fetch.")
+
+# Select Name and Times to print
+def select_name_time(cursor):
+    # Test Selection to print out Train name and Arrival_time columns
+    cursor.execute(f"SELECT {TRAIN_NAME_COLUMN}, {ARRIVAL_TIME_COLUMN} FROM {DB_NAME};")
+    print_fetch(cursor)
 
 # Test a sample insert
 def test_insert(cursor):
@@ -151,15 +161,32 @@ class Mutation:
     @strawberry.mutation
     def add_train(self, train_name: str, arrival_time: List[str]) -> Train:
         if (len(arrival_time) == 0):
-            logger.info("No arrival times provided!!!!!!!!!!!!!!!!!!!!!")
             raise HTTPException(status_code=400, detail="No arrival times provided")
         check_name_format(train_name)
         for time in arrival_time:
             check_time_format(time)
         logger.info(f"Adding train: {train_name}")
 
-        # TODO: Add the train to the database
+        # Get current date as a string
+        logger.info("Adding train to the database")
+        current_date = datetime.now().strftime('%Y-%m-%d')
+        total_rows_inserted = 0 # Total rows inserted
+        for time in arrival_time:
+            logger.info(f"arrival_time: {time}")
+            arrival_time_24h = datetime.strptime(time, '%I:%M %p').strftime('%H:%M:%S')
+            # Concatenate current date with arrival time
+            arrival_timestamp = f"{current_date} {arrival_time_24h}"
+            # TODO: Check if entry already exists in the Database before adding
+            cursor.execute(f"""
+                INSERT INTO {DB_NAME} ({TIME_COLUMN}, {TRAIN_NAME_COLUMN}, {ARRIVAL_TIME_COLUMN}) 
+                VALUES (NOW(), '{train_name}', '{arrival_timestamp}');
+                """)
+            total_rows_inserted += 1
+            select_name_time(cursor)
+        print(f"Total rows inserted: {total_rows_inserted}")
 
+        # TODO: Add the commited train to the database
+        # db.commit()
 
         return Train(train_name=train_name, arrival_time=arrival_time)
 
