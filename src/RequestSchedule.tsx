@@ -29,7 +29,7 @@ const RequestSchedule: React.FC<RequestScheduleProps> = ({
     }
   };
   return (
-    <Form layout="horizontal" style={{ maxWidth: 600 }}>
+    <Form layout="horizontal" className="formStyle">
       <h1> Request Train Line Schedule </h1>
       <Form.Item label="Requested Train">
         <Input
@@ -41,10 +41,16 @@ const RequestSchedule: React.FC<RequestScheduleProps> = ({
       </Form.Item>
       <Button
         type="primary"
+        style={{ marginBottom: "1rem" }}
         onClick={() =>
-          handleButtonClick(() => apiService.fetch(isGraphQL, requestedTrain))
+          handleButtonClick(() =>
+            apiService.fetch(isGraphQL, requestedTrain, "timesForTrain")
+          )
             .then((data) => {
               // handle the returned data here
+              if (data === undefined) {
+                throw new Error("Data is undefined");
+              }
               console.log("I got the data for the train!");
               console.log(data);
             })
@@ -68,9 +74,18 @@ const RequestSchedule: React.FC<RequestScheduleProps> = ({
       <Button
         type="primary"
         onClick={() =>
-          handleButtonClick(() => apiService.fetch(isGraphQL, requestedTime))
+          handleButtonClick(() =>
+            apiService.fetch(
+              isGraphQL,
+              requestedTime,
+              "trainsNextMultipleTimes"
+            )
+          )
             .then((data) => {
               // handle the returned data here
+              if (data === undefined) {
+                throw new Error("Data is undefined");
+              }
               console.log("I got the data for the time!");
               console.log(data);
             })
@@ -80,7 +95,29 @@ const RequestSchedule: React.FC<RequestScheduleProps> = ({
             })
         }
       >
-        Request Schedule by Time
+        Next Trains After Time
+      </Button>
+      <Button
+        type="primary"
+        onClick={() =>
+          handleButtonClick(() =>
+            apiService.fetch(isGraphQL, requestedTime, "trainsAtTime")
+          )
+            .then((data) => {
+              // handle the returned data here
+              if (data === undefined) {
+                throw new Error("Data is undefined");
+              }
+              console.log("I got the data for the time!");
+              console.log(data);
+            })
+            .catch((error) => {
+              // handle any errors
+              console.error(error);
+            })
+        }
+      >
+        Request Trains At Time
       </Button>
     </Form>
   );

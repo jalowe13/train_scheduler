@@ -1,7 +1,6 @@
 import "./App.css";
 import React, { useCallback, useState } from "react";
-import { Button, Switch, message } from "antd";
-import { apiService } from "./ApiService.tsx";
+import { Switch, message } from "antd";
 import NewTrainServiceForm from "./Form.tsx";
 import RequestSchedule from "./RequestSchedule.tsx";
 
@@ -45,19 +44,16 @@ const App: React.FC = () => {
           info={info}
           isGraphQL={isGraphQL}
         />
-        <div>
-          <h4>API Type</h4>
-          <Switch
-            checkedChildren="GraphQL"
-            unCheckedChildren="REST"
-            defaultChecked
-            onChange={(checked) => setIsGraphQL(checked)}
-          />
-          <h5>Debug</h5>
-          <Button onClick={() => handleButtonClick(apiService.healthCheck)}>
-            Health Check
-          </Button>
-        </div>
+        <h4>API Type</h4>
+        <Switch
+          checkedChildren="GraphQL"
+          unCheckedChildren="REST"
+          defaultChecked
+          onChange={(checked) => setIsGraphQL(checked)}
+        />
+        {
+          // TODO: Delete Database buttonz
+        }
       </header>
     </div>
   );

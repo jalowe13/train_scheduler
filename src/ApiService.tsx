@@ -17,20 +17,6 @@ async function healthCheckGraphQL() {
 }
 // GraphQL Mutation
 // Mutation to add a train to the GraphQL API
-// Example mutation
-/*
-const mutation = `
-mutation {
-  addTrain(
-    trainName: "Express 101"
-    arrivalTime: ["08:00", "12:00", "16:00", "20:00"]
-  ) {
-    trainName
-    arrivalTime
-  }
-}
-`;
-*/
 // Mutation with variables
 const mutation = `
 mutation AddTrain($train_name: String!, $arrival_time: [String!]!) {
@@ -43,19 +29,31 @@ mutation AddTrain($train_name: String!, $arrival_time: [String!]!) {
 
 // Function to fetch data from the GraphQL API
 // Data can be a string that contains a time or a train name
-async function fetchGraphQL(data: string) {
+async function fetchGraphQL(data: string, queryType: string) {
+  if (data === null || data === "") {
+    throw new Error("Data is null or empty");
+  }
   console.log("DATA:", data);
+  console.log("QUERY TYPE:", queryType);
   let query = "";
-  if (data.length < 5) {
-    // Any data less than 5 characters is a train name
-    query = `{timesForTrain(trainName: "${data}")}`;
-  } else {
-    const currentDateString = dayjs().format("YYYY-MM-DD");
-    const dateTimeString = `${currentDateString} ${data}`;
-    const formattedData = dayjs(dateTimeString, "YYYY-MM-DD h:mm A").format(
-      "YYYY-MM-DD HH:mm:ss"
-    );
-    query = `{trainsAtTime(arrivalTimestamp: "${formattedData}")}`;
+  const currentDateString = dayjs().format("YYYY-MM-DD");
+  const dateTimeString = `${currentDateString} ${data}`;
+  const formattedData = dayjs(dateTimeString, "YYYY-MM-DD h:mm A").format(
+    "YYYY-MM-DD HH:mm:ss"
+  );
+  switch (queryType) {
+    case "timesForTrain": // This is fine
+      query = `{timesForTrain(trainName: "${data}")}`;
+      break;
+    case "trainsAtTime": // This is fine
+      query = `{trainsAtTime(arrivalTimestamp: "${formattedData}")}`;
+      break;
+    case "trainsNextMultipleTimes":
+      query = `{trainsNextMultipleTimes(arrivalTimestamp: "${formattedData}") {arrivalTime, trainNames}}`;
+      console.debug("QUERY:", query);
+      break;
+    default:
+      throw new Error(`Invalid query type: ${queryType}`);
   }
   console.log("FETCHING:", query);
 
@@ -76,10 +74,13 @@ async function fetchGraphQL(data: string) {
 
     const responseBody = await response.json();
 
+    if (responseBody.data === undefined) {
+      throw new Error("Data is undefined");
+    }
+
     if (responseBody.errors) {
       throw new Error(`GraphQL Error: ${responseBody.errors[0].message}`);
     }
-
     return responseBody.data;
   } catch (error) {
     console.error("An error occurred:", error);
@@ -154,12 +155,17 @@ export const apiService = {
     }
     return postAPI("posts", data);
   },
-  fetch(isGraphQL: boolean, data: string | null) {
+  fetch(isGraphQL: boolean, data: string | null, queryType?: string) {
+    console.log("FETCHING:", data);
     if (data === null) {
+      console.log("Data is null");
       throw new Error("Data is null");
     }
     if (isGraphQL) {
-      return fetchGraphQL(data);
+      if (!queryType) {
+        throw new Error("Query type is required for GraphQL fetch");
+      }
+      return fetchGraphQL(data, queryType);
     }
     return fetchAPI("posts");
   },
