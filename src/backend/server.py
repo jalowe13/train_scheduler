@@ -16,21 +16,25 @@ from strawberry.fastapi import GraphQLRouter
 
 # Included is a hypothetical key value store database for the train schedule
 # But it is imporantly used as a cache for the train schedule data
+
+# Instance 1 - Key - Arrival Time, Value - List of Train Names
+# Instance 2 - Key - Train Name, Value - List of Arrival Times
+
 class KeyValueStore:
     def __init__(self):
         self.store = {}
         self.lock = threading.Lock()
 
-    def set(self, arrival_time, train_names):
+    def set(self, key, values):
         with self.lock:
-            logging.info(f"Setting value for {arrival_time}: {train_names}")
-            self.store[arrival_time] = list(train_names)
+            logging.info(f"Setting value for {key}: {values}")
+            self.store[key] = list(values)
 
-    def fetch(self, arrival_time):
+    def fetch(self, key):
         with self.lock:
-            logging.info(f"Fetching value for {arrival_time}")
-            value = self.store.get(arrival_time)
-            logging.info(f"Value: {value}")
+            logging.info(f"~~~~~~~~~~~~~~~~~~~~~~~~Fetching value for {key}")
+            value = self.store.get(key)
+            logging.info(f"~~~~~~~~~~~~~~~~~~~~~~~~Value: {value}")
             return value
     def keys(self):
         with self.lock:
@@ -61,37 +65,6 @@ def select_name_time(cursor):
     # Test Selection to print out Train name and Arrival_time columns
     cursor.execute(f"SELECT {TRAIN_NAME_COLUMN}, {ARRIVAL_TIME_COLUMN} FROM {DB_NAME};")
     print_fetch(cursor)
-
-# Test a sample insert
-def test_insert(cursor):
-        # Insert a test record
-    TEST_VALUE = "NOW(), 'Test Train', '2024-06-08 23:39:35'"
-    logger.log(logging.INFO, f"Inserting test record: {TEST_VALUE}")
-    cursor.execute(f"""
-        INSERT INTO {DB_NAME} ({TIME_COLUMN}, {TRAIN_NAME_COLUMN}, {ARRIVAL_TIME_COLUMN}) 
-        VALUES ({TEST_VALUE});
-        """)
-    # Test Selection to print out Train name and Arrival_time columns
-    #cursor.execute(f"SELECT {TRAIN_NAME_COLUMN}, {ARRIVAL_TIME_COLUMN} FROM {DB_NAME};")
-    cursor.execute(f"SELECT {TRAIN_NAME_COLUMN} FROM {DB_NAME};")
-    # Print out the rows
-    logger.info("Printing out the rows of Name column")
-    print_fetch(cursor)
-    cursor.execute(f"SELECT {ARRIVAL_TIME_COLUMN} FROM {DB_NAME};")
-    logger.info("Printing out the rows of Time column")
-    print_fetch(cursor)
-    cursor.execute(f"""
-    DELETE FROM {DB_NAME} 
-    WHERE {TRAIN_NAME_COLUMN} = 'Test Train' AND {ARRIVAL_TIME_COLUMN} = '2024-06-08 23:39:35';
-    """)
-    # Print out the rows
-    try:
-        print_fetch(cursor)
-    except psycopg2.ProgrammingError as e:
-        logger.info("No rows to print")
-
-
-
 
 # Setting up the connection to the database
 CONNECTION = "postgresql://postgres:password@127.0.0.1:5432/postgres"
@@ -135,8 +108,8 @@ if db is not None:
 else:
     print("Failed to connect to the database")
 
-kvs = KeyValueStore()
-
+kvs_arrival = KeyValueStore() # Arrival Time to Train Names
+kvs_train = KeyValueStore() # Train Name to Arrival Times   
 
 # Helper functions
 def check_name_format(name: str):
@@ -158,19 +131,6 @@ def check_time_format(time: str):
         raise HTTPException(status_code=400, 
                             detail="Invalid time format: missing :")
 
-
-    
-def get_trains():
-    return [
-        Train(
-            train_name="DSFF",
-            arrival_time=["12:00 PM", "11:00 AM"],
-        ),
-        Train(
-            train_name="GFAE",
-            arrival_time=["11:00 PM", "11:57 AM"],
-        )
-    ]
 # GraphQL API for the Train Schedule App
 # Function to get the train
 # Defining the Train and Query classes
@@ -181,7 +141,50 @@ class Train:
 
 @strawberry.type
 class Query:
-    trains: typing.List[Train] = strawberry.field(resolver=get_trains)
+    # Method to grab a time and all trains at that time from the cache
+    # Input - arrival timestamp '2024-06-09 10:55:00'
+    # Returns - List of train names
+    # Test Selection of all trains at specific time
+    @strawberry.field
+    def trains_at_time(self, arrival_timestamp: str) -> List[str]:
+        logger.info(arrival_timestamp)
+        time_to_query = arrival_timestamp # replace with the time you want to query
+        # TODO: Optimize database query to only fetch the train names that are not in the cache
+        cursor.execute(f"SELECT {TRAIN_NAME_COLUMN} FROM {DB_NAME} WHERE TO_CHAR({ARRIVAL_TIME_COLUMN}, 'YYYY-MM-DD HH24:MI:SS') = %s", (time_to_query,))
+        trains = cursor.fetchall()
+        logger.info(trains)
+        if not trains:
+            logger.info("No trains found")
+            return []
+        else:
+            logger.info("Trains found")
+            train_names = [train_tuple[0] for train_tuple in trains]
+            logger.info("Adding to time to the cache " + time_to_query + " " + str(train_names))
+            kvs_arrival.set(time_to_query, train_names)
+        kvs_arrival.fetch(time_to_query)
+        # TODO: Return train names from cache instead of the database
+        return train_names
+    
+    # Method to grab a train and all times for that train from the cache
+    # Input - train name 'Train A'
+    # Returns - List of arrival times
+    # Test Selection of all times for a specific train
+    @strawberry.field
+    def times_for_train(self, train_name: str) -> List[str]:
+        train_to_query = train_name # replace with the train you want to query
+        cursor.execute(f"SELECT {ARRIVAL_TIME_COLUMN} FROM {DB_NAME} WHERE {TRAIN_NAME_COLUMN} = %s", (train_to_query,))
+        times = cursor.fetchall()
+        if not times:
+            logger.info("No times found")
+            return []
+        else:
+            logger.info("Times found")
+            arrival_times = [time_tuple[0] for time_tuple in times]
+            logger.info("Adding to train to the cache " + train_to_query + " " + str(arrival_times))
+            kvs_train.set(train_to_query, arrival_times)
+        kvs_train.fetch(train_to_query)
+        # TODO: Return the arrival times for the train from cache instead of the database
+        return arrival_times
 
 @strawberry.type
 class Mutation:
@@ -193,7 +196,6 @@ class Mutation:
         for time in arrival_time:
             check_time_format(time)
         logger.info(f"Adding train: {train_name}")
-
         # Get current date as a string
         logger.info("Adding train to the database")
         current_date = datetime.now().strftime('%Y-%m-%d')
@@ -204,6 +206,7 @@ class Mutation:
             arrival_time_24h = datetime.strptime(time, '%I:%M %p').strftime('%H:%M:%S')
             # Concatenate current date with arrival time
             arrival_timestamp = f"{current_date} {arrival_time_24h}"
+            logger.info(f"arrival_timestamp: {arrival_timestamp}")
             # TODO: Check if entry already exists in the Database before adding
             cursor.execute(f"""
                 INSERT INTO {DB_NAME} ({TIME_COLUMN}, {TRAIN_NAME_COLUMN}, {ARRIVAL_TIME_COLUMN}) 
@@ -211,33 +214,7 @@ class Mutation:
                 """, (train_name, arrival_timestamp))
             select_name_time(cursor)
             total_rows_inserted += 1
-
         print(f"Total rows inserted: {total_rows_inserted}")
-
-        # TODO: Method to grab a time and all trains at that time from the cache
-        # Input - arrival timestamp '2024-06-09 10:55:00'
-        # Returns - List of train names
-        # Test Selection of all trains at specific time
-        logger.info(arrival_timestamp)
-        logger.info(arrival_time_24h)
-        time_to_query = arrival_timestamp # replace with the time you want to query
-
-        cursor.execute(f"SELECT {TRAIN_NAME_COLUMN} FROM {DB_NAME} WHERE TO_CHAR({ARRIVAL_TIME_COLUMN}, 'YYYY-MM-DD HH24:MI:SS') = %s", (time_to_query,))
-        logger.info("Printing out the rows of Name column!!!!")
-        trains = cursor.fetchall()
-        logger.info(trains)
-        if not trains:
-            logger.info("No trains found")
-        else:
-            logger.info("Trains found")
-            train_names = [train_tuple[0] for train_tuple in trains]
-            logger.info("Adding to time to the cache" + time_to_query + " " + str(train_names))
-            kvs.set(time_to_query, train_names)
-
-        kvs.fetch(time_to_query)
-        kvs.keys()
-        select_name_time(cursor)
-
         return Train(train_name=train_name, arrival_time=arrival_time)
 
 
@@ -257,8 +234,6 @@ app.add_middleware(
     allow_headers=["*"], # Accept, Content-Type, Authorization
 )
 
-
-    
 # REST API for GET and POST requests
 class Post(BaseModel):
     train_name: str
