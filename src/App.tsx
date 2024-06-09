@@ -24,6 +24,7 @@ const App: React.FC = () => {
       try {
         const data = await apiFunction(isGraphQL);
         console.log("Api data:", data);
+        return data;
       } catch (error) {
         console.error(`Failed to fetch data`, error);
       }
@@ -39,7 +40,11 @@ const App: React.FC = () => {
           info={info}
           isGraphQL={isGraphQL}
         />
-        <RequestSchedule />
+        <RequestSchedule
+          handleButtonClick={handleButtonClick}
+          info={info}
+          isGraphQL={isGraphQL}
+        />
         <div>
           <h4>API Type</h4>
           <Switch

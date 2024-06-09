@@ -1,3 +1,5 @@
+import dayjs from "dayjs";
+
 // Api Service for the application
 // Jacob Lowe
 
@@ -38,6 +40,52 @@ mutation AddTrain($train_name: String!, $arrival_time: [String!]!) {
   }
 }
 `;
+
+// Function to fetch data from the GraphQL API
+// Data can be a string that contains a time or a train name
+async function fetchGraphQL(data: string) {
+  console.log("DATA:", data);
+  let query = "";
+  if (data.length < 5) {
+    // Any data less than 5 characters is a train name
+    query = `{timesForTrain(trainName: "${data}")}`;
+  } else {
+    const currentDateString = dayjs().format("YYYY-MM-DD");
+    const dateTimeString = `${currentDateString} ${data}`;
+    const formattedData = dayjs(dateTimeString, "YYYY-MM-DD h:mm A").format(
+      "YYYY-MM-DD HH:mm:ss"
+    );
+    query = `{trainsAtTime(arrivalTimestamp: "${formattedData}")}`;
+  }
+  console.log("FETCHING:", query);
+
+  try {
+    const response = await fetch(GRAPHQL_API, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        query,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Network response was not ok: ${response.statusText}`);
+    }
+
+    const responseBody = await response.json();
+
+    if (responseBody.errors) {
+      throw new Error(`GraphQL Error: ${responseBody.errors[0].message}`);
+    }
+
+    return responseBody.data;
+  } catch (error) {
+    console.error("An error occurred:", error);
+    throw error;
+  }
+}
 
 async function postGraphQL(query: string, variables = {}) {
   const body = JSON.stringify({ query, variables });
@@ -105,5 +153,14 @@ export const apiService = {
         });
     }
     return postAPI("posts", data);
+  },
+  fetch(isGraphQL: boolean, data: string | null) {
+    if (data === null) {
+      throw new Error("Data is null");
+    }
+    if (isGraphQL) {
+      return fetchGraphQL(data);
+    }
+    return fetchAPI("posts");
   },
 };

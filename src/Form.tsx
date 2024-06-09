@@ -71,10 +71,9 @@ const NewTrainServiceForm: React.FC<NewTrainServiceFormProps> = ({
   const handleSubmit = () => {
     info();
     handleButtonClick(() => apiService.submitForm(isGraphQL, postData));
-    // Commented out to not clear the form after submission
-    // setSelectedTime(null);
-    // setTimes([]);
-    // setName("");
+    setSelectedTime(null);
+    setTimes([]);
+    setName("");
   };
 
   // Submit to the API on Click of the submit button
