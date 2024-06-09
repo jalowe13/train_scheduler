@@ -21,15 +21,15 @@ class KeyValueStore:
         self.store = {}
         self.lock = threading.Lock()
 
-    def set(self, train_name, arrival_times):
+    def set(self, arrival_time, train_names):
         with self.lock:
-            logging.info(f"Setting value for {train_name}: {arrival_times}")
-            self.store[train_name] = list(arrival_times)
+            logging.info(f"Setting value for {arrival_time}: {train_names}")
+            self.store[arrival_time] = list(train_names)
 
-    def fetch(self, train_name):
+    def fetch(self, arrival_time):
         with self.lock:
-            logging.info(f"Fetching value for {train_name}")
-            value = self.store.get(train_name)
+            logging.info(f"Fetching value for {arrival_time}")
+            value = self.store.get(arrival_time)
             logging.info(f"Value: {value}")
             return value
     def keys(self):
@@ -115,6 +115,8 @@ if db is not None:
     cursor = db.cursor()
     ## TIMESTAMPTZ is the timestamp with timezone
     ## time is the time created in the database
+    ## train_name is the name of the train
+    ## arrival_time is the time the train arrives
     DB_NAME : str = "train_schedule"
     TIME_COLUMN : str = "time"
     TRAIN_NAME_COLUMN : str = "train_name"
@@ -122,14 +124,13 @@ if db is not None:
     NAME_IDX : str = "ix_train_name_time"
     cursor.execute(f"""
         CREATE TABLE {DB_NAME} (
-            {TIME_COLUMN} TIMESTAMPTZ NOT NULL, 
+            {TIME_COLUMN} TIMESTAMPTZ NOT NULL DEFAULT NOW(), 
             {TRAIN_NAME_COLUMN} TEXT NOT NULL,
             {ARRIVAL_TIME_COLUMN} TIMESTAMPTZ NOT NULL
         );
         """)
-    cursor.execute(f"SELECT create_hypertable('{DB_NAME}', '{TIME_COLUMN}');")
-    cursor.execute(f"CREATE INDEX {NAME_IDX} ON {DB_NAME} ({TRAIN_NAME_COLUMN}, time DESC);")
-    test_insert(cursor) 
+    cursor.execute(f"SELECT create_hypertable('{DB_NAME}', '{ARRIVAL_TIME_COLUMN}');")
+    cursor.execute(f"CREATE INDEX {NAME_IDX} ON {DB_NAME} ({TRAIN_NAME_COLUMN}, {ARRIVAL_TIME_COLUMN} DESC);")
     logger.info("Database setup completed")
 else:
     print("Failed to connect to the database")
@@ -198,7 +199,6 @@ class Mutation:
         current_date = datetime.now().strftime('%Y-%m-%d')
         total_rows_inserted = 0 # Total rows inserted
         # Fetch existing arrival times for the train
-        existing_times = kvs.fetch(train_name) or []
         for time in arrival_time:
             logger.info(f"arrival_time: {time}")
             arrival_time_24h = datetime.strptime(time, '%I:%M %p').strftime('%H:%M:%S')
@@ -207,21 +207,36 @@ class Mutation:
             # TODO: Check if entry already exists in the Database before adding
             cursor.execute(f"""
                 INSERT INTO {DB_NAME} ({TIME_COLUMN}, {TRAIN_NAME_COLUMN}, {ARRIVAL_TIME_COLUMN}) 
-                VALUES (NOW(), '{train_name}', '{arrival_timestamp}');
-                """)
+                VALUES (NOW(),%s,%s );
+                """, (train_name, arrival_timestamp))
             select_name_time(cursor)
-            # Append new time
-            existing_times.append(arrival_timestamp)
             total_rows_inserted += 1
-        # Store updated list
-        # NOTE: The cache is actually used for fetch operations to speed up by
-        # fetching names at a specific time. Not for these mutation/post operations
-        kvs.set(train_name, existing_times)
-        # These are for logging data
-        kvs.fetch(train_name)
-        kvs.keys()
-        # End logging data
+
         print(f"Total rows inserted: {total_rows_inserted}")
+
+        # TODO: Method to grab a time and all trains at that time from the cache
+        # Input - arrival timestamp '2024-06-09 10:55:00'
+        # Returns - List of train names
+        # Test Selection of all trains at specific time
+        logger.info(arrival_timestamp)
+        logger.info(arrival_time_24h)
+        time_to_query = arrival_timestamp # replace with the time you want to query
+
+        cursor.execute(f"SELECT {TRAIN_NAME_COLUMN} FROM {DB_NAME} WHERE TO_CHAR({ARRIVAL_TIME_COLUMN}, 'YYYY-MM-DD HH24:MI:SS') = %s", (time_to_query,))
+        logger.info("Printing out the rows of Name column!!!!")
+        trains = cursor.fetchall()
+        logger.info(trains)
+        if not trains:
+            logger.info("No trains found")
+        else:
+            logger.info("Trains found")
+            train_names = [train_tuple[0] for train_tuple in trains]
+            logger.info("Adding to time to the cache" + time_to_query + " " + str(train_names))
+            kvs.set(time_to_query, train_names)
+
+        kvs.fetch(time_to_query)
+        kvs.keys()
+        select_name_time(cursor)
 
         return Train(train_name=train_name, arrival_time=arrival_time)
 
