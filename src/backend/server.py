@@ -19,6 +19,7 @@ from strawberry.fastapi import GraphQLRouter
 
 # Instance 1 - Key - Arrival Time, Value - List of Train Names
 # Instance 2 - Key - Train Name, Value - List of Arrival Times
+# Instance 3 - Key - Arrival Time, Value - Closest Next Multiple Trains
 
 class KeyValueStore:
     def __init__(self):
@@ -108,8 +109,12 @@ if db is not None:
 else:
     print("Failed to connect to the database")
 
+# Key Value Pair Instantiations
+# Each Instantiation caches a different query type
 kvs_arrival = KeyValueStore() # Arrival Time to Train Names
-kvs_train = KeyValueStore() # Train Name to Arrival Times   
+kvs_train = KeyValueStore() # Train Name to Arrival Times
+kvs_arrival_next_trains = KeyValueStore() # Arrival Time to Closest Next Multiple Trains   
+
 
 # Helper functions
 def check_name_format(name: str):
@@ -154,6 +159,86 @@ def fetch_cache_or_db(cache, key, sql_query, sql_params):
 
     return data
 
+
+# Returns the arrival time and train names used for getting next multiple trains at a time
+@strawberry.type
+class TrainArrival:
+    arrival_time: str
+    train_names: List[str]
+
+
+# SQL Query Operations
+
+# Method to grab a time and all trains at that time from the cache
+# Input - arrival timestamp '2024-06-09 10:55:00'
+# Returns - List of train names
+# Test Selection of all trains at specific time
+def get_trains_at_time(arrival_timestamp: str) -> List[str]:
+    logger.info(arrival_timestamp)
+
+    sql_query = f"""
+        SELECT {TRAIN_NAME_COLUMN} 
+        FROM {DB_NAME} 
+        WHERE TO_CHAR({ARRIVAL_TIME_COLUMN}, 'YYYY-MM-DD HH24:MI:SS') = %s
+    """
+    trains = fetch_cache_or_db(kvs_arrival, arrival_timestamp, sql_query, (arrival_timestamp,))
+    if not trains:
+        error_detail = f"No trains found for time: '{arrival_timestamp}'"
+        logger.error(error_detail)
+        raise HTTPException(status_code=400, detail=error_detail)
+    else:
+        logger.info("Trains found")
+        train_names = [train_tuple[0] for train_tuple in trains]
+    return train_names
+
+# Method to grab the next multiple trains after a specific time
+# Input - arrival timestamp '2024-06-09 10:55:00'
+# Returns - Arrival time and train names
+def get_trains_next_multiple_times(arrival_timestamp: str) -> TrainArrival:
+    logger.info(arrival_timestamp)
+    time_to_query = arrival_timestamp # replace with the time you want to query
+    sql_query = f"""
+        SELECT DATE_TRUNC('minute', {ARRIVAL_TIME_COLUMN}) as arrival_time, ARRAY_AGG({TRAIN_NAME_COLUMN})
+        FROM {DB_NAME}
+        WHERE {ARRIVAL_TIME_COLUMN} > %s
+        GROUP BY arrival_time
+        HAVING COUNT({TRAIN_NAME_COLUMN}) > 1
+        ORDER BY arrival_time
+        LIMIT 1
+    """
+    result = fetch_cache_or_db(kvs_arrival_next_trains, time_to_query, sql_query, (time_to_query,))
+    if not result:
+        error_detail = f"No simultaneous trains found after time: '{arrival_timestamp}'"
+        logger.error(error_detail)
+        raise HTTPException(status_code=400, detail=error_detail)
+    else:
+        arrival_time, train_names = result[0]
+        logger.info(f"Next simultaneous trains found at {arrival_time}: {train_names}")
+    return TrainArrival(arrival_time=arrival_time, train_names=train_names)
+
+# Method to grab a train and all times for that train from the cache
+# Input - train name 'Train A'
+# Returns - List of arrival times
+# Test Selection of all times for a specific train
+def get_times_for_train(train_name: str) -> List[str]:
+    logger.info(train_name)
+    sql_query = f"""
+        SELECT {ARRIVAL_TIME_COLUMN} 
+        FROM {DB_NAME} 
+        WHERE {TRAIN_NAME_COLUMN} = %s
+    """
+    times = fetch_cache_or_db(kvs_train, train_name, sql_query, (train_name,))
+    if not times:
+        error_detail = f"No times found for train: '{train_name}'"
+        logger.error(error_detail)
+        raise HTTPException(status_code=400, detail=error_detail)
+    else:
+        logger.info("Times found")
+        arrival_times = [time_tuple[0] for time_tuple in times]
+    return arrival_times
+
+
+
 # GraphQL API for the Train Schedule App
 # Function to get the train
 # Defining the Train and Query classes
@@ -162,86 +247,22 @@ class Train:
     train_name: str
     arrival_time: List[str]
 
-# Returns the arrival time and train names used for getting next multiple trains at a time
-@strawberry.type
-class TrainArrival:
-    arrival_time: str
-    train_names: List[str]
 
 @strawberry.type
 class Query:
-    # Method to grab a time and all trains at that time from the cache
-    # Input - arrival timestamp '2024-06-09 10:55:00'
-    # Returns - List of train names
-    # Test Selection of all trains at specific time
+
     @strawberry.field
     def trains_at_time(self, arrival_timestamp: str) -> List[str]:
-        logger.info(arrival_timestamp)
-
-        sql_query = f"""
-            SELECT {TRAIN_NAME_COLUMN} 
-            FROM {DB_NAME} 
-            WHERE TO_CHAR({ARRIVAL_TIME_COLUMN}, 'YYYY-MM-DD HH24:MI:SS') = %s
-        """
-        trains = fetch_cache_or_db(kvs_arrival, arrival_timestamp, sql_query, (arrival_timestamp,))
-        if not trains:
-            error_detail = f"No trains found for time: '{arrival_timestamp}'"
-            logger.error(error_detail)
-            raise HTTPException(status_code=400, detail=error_detail)
-        else:
-            logger.info("Trains found")
-            train_names = [train_tuple[0] for train_tuple in trains]
-        return train_names
+        return get_trains_at_time(arrival_timestamp)
     
-    # Method to grab the next multiple trains after a specific time
-    # Input - arrival timestamp '2024-06-09 10:55:00'
-    # Returns - Arrival time and train names
     @strawberry.field
     def trains_next_multiple_times(self, arrival_timestamp: str) -> TrainArrival:
-        logger.info(arrival_timestamp)
-        time_to_query = arrival_timestamp # replace with the time you want to query
-        sql_query = f"""
-            SELECT DATE_TRUNC('minute', {ARRIVAL_TIME_COLUMN}) as arrival_time, ARRAY_AGG({TRAIN_NAME_COLUMN})
-            FROM {DB_NAME}
-            WHERE {ARRIVAL_TIME_COLUMN} > %s
-            GROUP BY arrival_time
-            HAVING COUNT({TRAIN_NAME_COLUMN}) > 1
-            ORDER BY arrival_time
-            LIMIT 1
-        """
-        result = fetch_cache_or_db(kvs_arrival, time_to_query, sql_query, (time_to_query,))
-        if not result:
-            error_detail = f"No simultaneous trains found after time: '{arrival_timestamp}'"
-            logger.error(error_detail)
-            raise HTTPException(status_code=400, detail=error_detail)
-        else:
-            arrival_time, train_names = result[0]
-            logger.info(f"Next simultaneous trains found at {arrival_time}: {train_names}")
+        return get_trains_next_multiple_times(arrival_timestamp)
 
-        return TrainArrival(arrival_time=arrival_time, train_names=train_names)
-
-    
-    # Method to grab a train and all times for that train from the cache
-    # Input - train name 'Train A'
-    # Returns - List of arrival times
-    # Test Selection of all times for a specific train
     @strawberry.field
     def times_for_train(self, train_name: str) -> List[str]:
-        logger.info(train_name)
-        sql_query = f"""
-            SELECT {ARRIVAL_TIME_COLUMN} 
-            FROM {DB_NAME} 
-            WHERE {TRAIN_NAME_COLUMN} = %s
-        """
-        times = fetch_cache_or_db(kvs_train, train_name, sql_query, (train_name,))
-        if not times:
-            error_detail = f"No times found for train: '{train_name}'"
-            logger.error(error_detail)
-            raise HTTPException(status_code=400, detail=error_detail)
-        else:
-            logger.info("Times found")
-            arrival_times = [time_tuple[0] for time_tuple in times]
-        return arrival_times
+        return get_times_for_train(train_name)
+
 
 @strawberry.type
 class Mutation:
@@ -303,19 +324,24 @@ async def health_check():
     logger.info("Request at health check endpoint")
     return {"status": "OK"}
 
-# POST request to create a new train post schedule
-@app.post("/api/v1/posts")
-async def create_post(post: Post):
-    logger.info(f"Request to create a new post with title: {post.train_name}")
-    check_name_format(post.train_name)
-    if (len(post.arrival_time) == 0):
-        raise HTTPException(status_code=400, detail="No arrival times provided")
-    for time in post.arrival_time:
-       check_time_format(time) 
-
-    # TODO: Add the train to the database
-
-    return {"id": 1, "train_name": post.train_name,
-             "arrival_time": post.arrival_time}
+@app.get("/api/v1/trains/{train_name}/arrival-times", response_model=List[str])
+def read_times_for_train(train_name: str):
+    try:
+        return get_times_for_train(train_name)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    
+@app.get("/api/v1/times/{arrival_timestamp}/trains", response_model=List[str])
+def read_trains_at_time(arrival_timestamp: str):
+    try:
+        return get_times_for_train(arrival_timestamp)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+@app.get("/api/v1/arrival-times/{arrival_timestamp}/multiple-trains", response_model=TrainArrival)
+def read_trains_next_multiple_times(arrival_timestamp: str):
+    try:
+        return get_trains_next_multiple_times(arrival_timestamp)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
