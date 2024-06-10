@@ -21,6 +21,8 @@ from strawberry.fastapi import GraphQLRouter
 # Instance 2 - Key - Train Name, Value - List of Arrival Times
 # Instance 3 - Key - Arrival Time, Value - Closest Next Multiple Trains
 
+USE_GRAPH = True; # Set to True to use GraphQL API, False to use REST API
+
 class KeyValueStore:
     def __init__(self):
         self.store = {}
@@ -48,7 +50,7 @@ class KeyValueStore:
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 logger.info("Started the server")
-logger.info("You can access strawberry GraphQL playground at http://127.0.0.1:8080/graphql")
+logger.info("You can access strawberry GraphQL playground at http://127.0.0.1:8082/graphql")
 # Setting up the FastAPI app
 app = FastAPI()
 
@@ -165,6 +167,10 @@ def fetch_cache_or_db(cache, key, sql_query, sql_params):
 class TrainArrival:
     arrival_time: str
     train_names: List[str]
+@strawberry.type
+class Train:
+    train_name: str
+    arrival_time: List[str]
 
 
 # SQL Query Operations
@@ -235,19 +241,45 @@ def get_times_for_train(train_name: str) -> List[str]:
     else:
         logger.info("Times found")
         arrival_times = [time_tuple[0] for time_tuple in times]
+    logger.debug(f"Arrival times are {arrival_times}")
     return arrival_times
 
+    
+# POST Requests for Graph and REST APIs
+def post_add_train(train_name: str, arrival_time: List[str]) -> Train:
+    if (len(arrival_time) == 0):
+        raise HTTPException(status_code=400, detail="No arrival times provided")
+    check_name_format(train_name)
+    for time in arrival_time:
+        check_time_format(time)
+    logger.info(f"Adding train: {train_name}")
+    # Get current date as a string
+    logger.info("Adding train to the database")
+    current_date = datetime.now().strftime('%Y-%m-%d')
+    total_rows_inserted = 0 # Total rows inserted
+    # Fetch existing arrival times for the train
+    for time in arrival_time:
+        logger.info(f"arrival_time: {time}")
+        arrival_time_24h = datetime.strptime(time, '%I:%M %p').strftime('%H:%M:%S')
+        # Concatenate current date with arrival time
+        arrival_timestamp = f"{current_date} {arrival_time_24h}"
+        logger.info(f"arrival_timestamp: {arrival_timestamp}")
+        # TODO: Check if entry already exists in the Database before adding
+        cursor.execute(f"""
+            INSERT INTO {DB_NAME} ({TIME_COLUMN}, {TRAIN_NAME_COLUMN}, {ARRIVAL_TIME_COLUMN}) 
+            VALUES (NOW(),%s,%s );
+            """, (train_name, arrival_timestamp))
+        select_name_time(cursor)
+        total_rows_inserted += 1
+    print(f"Total rows inserted: {total_rows_inserted}")
+    return Train(train_name=train_name, arrival_time=arrival_time)
 
 
 # GraphQL API for the Train Schedule App
 # Function to get the train
 # Defining the Train and Query classes
-@strawberry.type
-class Train:
-    train_name: str
-    arrival_time: List[str]
 
-
+# Query class for the GraphQL API similar to GET requests
 @strawberry.type
 class Query:
 
@@ -263,46 +295,22 @@ class Query:
     def times_for_train(self, train_name: str) -> List[str]:
         return get_times_for_train(train_name)
 
-
+# Mutation class for the GraphQL API similar to POST requests
 @strawberry.type
 class Mutation:
+
     @strawberry.mutation
     def add_train(self, train_name: str, arrival_time: List[str]) -> Train:
-        if (len(arrival_time) == 0):
-            raise HTTPException(status_code=400, detail="No arrival times provided")
-        check_name_format(train_name)
-        for time in arrival_time:
-            check_time_format(time)
-        logger.info(f"Adding train: {train_name}")
-        # Get current date as a string
-        logger.info("Adding train to the database")
-        current_date = datetime.now().strftime('%Y-%m-%d')
-        total_rows_inserted = 0 # Total rows inserted
-        # Fetch existing arrival times for the train
-        for time in arrival_time:
-            logger.info(f"arrival_time: {time}")
-            arrival_time_24h = datetime.strptime(time, '%I:%M %p').strftime('%H:%M:%S')
-            # Concatenate current date with arrival time
-            arrival_timestamp = f"{current_date} {arrival_time_24h}"
-            logger.info(f"arrival_timestamp: {arrival_timestamp}")
-            # TODO: Check if entry already exists in the Database before adding
-            cursor.execute(f"""
-                INSERT INTO {DB_NAME} ({TIME_COLUMN}, {TRAIN_NAME_COLUMN}, {ARRIVAL_TIME_COLUMN}) 
-                VALUES (NOW(),%s,%s );
-                """, (train_name, arrival_timestamp))
-            select_name_time(cursor)
-            total_rows_inserted += 1
-        print(f"Total rows inserted: {total_rows_inserted}")
-        return Train(train_name=train_name, arrival_time=arrival_time)
+        return post_add_train(train_name,arrival_time)
+
 
 # TODO: Delete database button
 
 # Setting up the GraphQL schema
-schema = strawberry.Schema(query=Query, mutation=Mutation)
-graphql_app = GraphQLRouter(schema)
-app.include_router(graphql_app, prefix="/graphql")
-
-
+if USE_GRAPH:
+    schema = strawberry.Schema(query=Query, mutation=Mutation)
+    graphql_app = GraphQLRouter(schema)
+    app.include_router(graphql_app, prefix="/graphql")
 # Setting up CORS middleware for information being able to be
 # accessed from the frontend
 app.add_middleware(
@@ -313,10 +321,23 @@ app.add_middleware(
     allow_headers=["*"], # Accept, Content-Type, Authorization
 )
 
+
+
+
 # REST API for GET and POST requests
 class Post(BaseModel):
     train_name: str
     arrival_time: List[str]
+
+# POST request to add a train
+@app.post("/api/v1/posts", response_model=Train)
+async def add_train(train: Train):
+    if len(train.arrival_time) == 0:
+        raise HTTPException(status_code=400, detail="No arrival times provided")
+    logger.info(f"Adding train: {train.train_name}")
+    # Add your validation and database insertion logic here
+    train = post_add_train(train.train_name, train.arrival_time)
+    return train
 
 # GET request to check if the server is running
 @app.get("/api/v1/health")
@@ -324,20 +345,21 @@ async def health_check():
     logger.info("Request at health check endpoint")
     return {"status": "OK"}
 
-@app.get("/api/v1/trains/{train_name}/arrival-times", response_model=List[str])
+@app.get("/api/v1/trains/{train_name}/arrival-times")
 def read_times_for_train(train_name: str):
     try:
         return get_times_for_train(train_name)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
     
-@app.get("/api/v1/times/{arrival_timestamp}/trains", response_model=List[str])
+@app.get("/api/v1/times/{arrival_timestamp}/trains")
 def read_trains_at_time(arrival_timestamp: str):
     try:
-        return get_times_for_train(arrival_timestamp)
+        logger.info(f"Getting trains at time: {arrival_timestamp}")
+        return get_trains_at_time(arrival_timestamp)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
-@app.get("/api/v1/arrival-times/{arrival_timestamp}/multiple-trains", response_model=TrainArrival)
+@app.get("/api/v1/arrival-times/{arrival_timestamp}/multiple-trains")
 def read_trains_next_multiple_times(arrival_timestamp: str):
     try:
         return get_trains_next_multiple_times(arrival_timestamp)

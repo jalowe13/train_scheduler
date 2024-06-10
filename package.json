@@ -21,7 +21,7 @@
     "electron-start": "set FORCE_COLOR=1 && electron .",
     "start": "set BROWSER=none&& set PORT=3000 && react-scripts start",
     "start-dynamo": "docker run -p 8001:8000 amazon/dynamodb-local",
-    "start-uvicorn": "cd src/backend && python -m uvicorn server:app --port 8080 --reload",
+    "start-uvicorn": "cd src/backend && python -m uvicorn server:app --port 8082 --reload",
     "start-go": "cd src/backend && go run . serve",
     "start-frontend": "concurrently \"npm run start\" \"npm run electron-start\"",
     "startappgo": "node src/start.js true",

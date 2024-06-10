@@ -4,7 +4,7 @@ import dayjs from "dayjs";
 // Jacob Lowe
 
 // This object contains functions that make requests to the API
-const url: string = "http://127.0.0.1:8080";
+const url: string = "http://127.0.0.1:8082";
 const api_version: string = "/api/v1/";
 const GRAPHQL_API: string = `${url}/graphql`;
 
@@ -119,6 +119,7 @@ async function postAPI(endpoint: string, body = null, options = {}) {
 async function fetchAPI(endpoint: string, options = {}) {
   console.log("FETCHING ENDPOINT:", endpoint, "WITH OPTIONS:", options);
   try {
+    console.log("FETCHING:", `${url}${api_version}${endpoint}`);
     const response = await fetch(`${url}${api_version}${endpoint}`);
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
@@ -156,7 +157,7 @@ export const apiService = {
     return postAPI("posts", data);
   },
   fetch(isGraphQL: boolean, data: string | null, queryType?: string) {
-    console.log("FETCHING:", data);
+    console.log("GRAPHQL:", isGraphQL, "DATA:", data, "QUERY TYPE:", queryType);
     if (data === null) {
       console.log("Data is null");
       throw new Error("Data is null");
@@ -167,6 +168,23 @@ export const apiService = {
       }
       return fetchGraphQL(data, queryType);
     }
-    return fetchAPI("posts");
+    console.log("ITS REST");
+    // This is for appending date to the time. Its handled in my GRAPHQl but not REST
+    const currentDateString = dayjs().format("YYYY-MM-DD");
+    const dateTimeString = `${currentDateString} ${data}`;
+    const formattedData = dayjs(dateTimeString, "YYYY-MM-DD h:mm A").format(
+      "YYYY-MM-DD HH:mm:ss"
+    );
+    switch (queryType) {
+      case "timesForTrain":
+        console.log("FETCHING TIMES FOR TRAIN:", data);
+        return fetchAPI(`trains/${data}/arrival-times`);
+      case "trainsAtTime":
+        return fetchAPI(`times/${formattedData}/trains`);
+      case "trainsNextMultipleTimes":
+        return fetchAPI(`arrival-times/${formattedData}/multiple-trains`);
+      default:
+        throw new Error(`Invalid query type: ${queryType}`);
+    }
   },
 };
