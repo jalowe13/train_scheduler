@@ -1,4 +1,6 @@
 
+# Train Scheduler Project
+![image](https://github.com/jalowe13/train_scheduler/assets/40873986/a92cc8bd-ca30-4774-abdf-7e90be55ec7f)
 
 # Problem Statement Breakdown
 # Context
@@ -44,6 +46,13 @@ Capability Restrictions
 
 
 # My Approach
+## Front-End
+React
+ANT UED
+### Back-End
+Electron for Framework
+Python with FastAPI, (ASGI to serve ) for designing the GraphQL (with Strawberry to define type schema) and REST APIs
+Docker container with TimescaleDB
 ## API Choice
 Deciding between GraphQL and REST. 
 - GraphQL is good for many complex queries and is more complex than REST and handles under and over-fetching better. It also puts everything into a singular endpoint that is parsed.
@@ -51,11 +60,11 @@ Deciding between GraphQL and REST.
 - I compare the server response timings between both in this project
 
 # Database choice
-- Key Value Pairs are required and I will be using them specifically for caching as I wanted to dive deeper into how databases work especially relational databases.
-- For my relational database I choice TimescaleDB. It extends off PostgreSQL and is used for large datasets of timestamped data and includes optimizations for this type of data. Its an API that is usable on the basic sense for SQL queries but can also be learned upon through further project research.
+- Key Value Pairs are required and I will be using them specifically for caching as I wanted to dive deeper into how databases work, especially relational databases.
+- For my relational database I chose TimescaleDB. It extends off PostgreSQL and is used for large datasets of timestamped data and includes optimizations using hyper tables for this type of data. It's an API that is usable in the basic sense for SQL queries but can also be learned through further project research.
 
-# Optimization Strategys
-- On GET requests either from REST or GraphQL if a train name or timeset is not in a key value pair dictionary it will be added to one for caching purposes
+# Optimization Strategies
+- On GET requests either from REST or GraphQL if a train name or time set is not in a key-value pair dictionary it will be added to one for caching purposes
 - 3 Caches are used to minimize expensive Database calls
 - Instance 1 - Key - Arrival Time, Value - List of Train Names
 - Instance 2 - Key - Train Name, Value - List of Arrival Times
@@ -63,12 +72,12 @@ Deciding between GraphQL and REST.
 
 [GraphQL - FastAPI (tiangolo.com)](https://fastapi.tiangolo.com/how-to/graphql/)
 [FastAPI | 🍓 Strawberry GraphQL](https://strawberry.rocks/docs/integrations/fastapi#options)
-Python Env managed by [[Conda]]
+Python Env managed by Conda
 [Timescale Documentation | Install TimescaleDB from Docker container](https://docs.timescale.com/self-hosted/latest/install/installation-docker/)
 [Timescale Documentation | Tables and hypertables](https://docs.timescale.com/getting-started/latest/tables-hypertables/)
 
 Note:
-GraphQL always returns 400 it receives a process. Throwing 200 in the body response of the message
+GraphQL always returns 400 when it receives a process. Throwing 200 in the body response of the message
 
 # Tests 
 ## PUSH Request of 1 Train Schedule with 4 times
