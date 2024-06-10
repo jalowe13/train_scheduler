@@ -11,10 +11,7 @@ const GRAPHQL_API: string = `${url}/graphql`;
 // Helper functions
 
 // GraphQL API Functions
-// Health Check for the GraphQL API
-async function healthCheckGraphQL() {
-  return null;
-}
+
 // GraphQL Mutation
 // Mutation to add a train to the GraphQL API
 // Mutation with variables
@@ -32,6 +29,9 @@ mutation AddTrain($train_name: String!, $arrival_time: [String!]!) {
 async function fetchGraphQL(data: string, queryType: string) {
   if (data === null || data === "") {
     throw new Error("Data is null or empty");
+  }
+  if (queryType === null || queryType === "") {
+    throw new Error("Query type is null or empty");
   }
   console.log("DATA:", data);
   console.log("QUERY TYPE:", queryType);
@@ -74,12 +74,9 @@ async function fetchGraphQL(data: string, queryType: string) {
 
     const responseBody = await response.json();
 
-    if (responseBody.data === undefined) {
-      throw new Error("Data is undefined");
-    }
-
     if (responseBody.errors) {
-      throw new Error(`GraphQL Error: ${responseBody.errors[0].message}`);
+      console.error("GraphQL Error:", responseBody.errors[0].message);
+      return responseBody.errors[0].message;
     }
     return responseBody.data;
   } catch (error) {
@@ -98,6 +95,10 @@ async function postGraphQL(query: string, variables = {}) {
 
   const response = await fetch(GRAPHQL_API, options);
   const responseBody = await response.json();
+  if (responseBody.errors) {
+    console.error("GraphQL Error:", responseBody.errors[0].message);
+    return responseBody.errors[0].message;
+  }
 
   return responseBody.data;
 }
@@ -117,6 +118,9 @@ async function postAPI(endpoint: string, body = null, options = {}) {
 
 // Generalized function to make FETCH requests to the API (DRY method)
 async function fetchAPI(endpoint: string, options = {}) {
+  if (endpoint === null || endpoint === "") {
+    throw new Error("Endpoint is null or empty for fetchAPI");
+  }
   console.log("FETCHING ENDPOINT:", endpoint, "WITH OPTIONS:", options);
   try {
     console.log("FETCHING:", `${url}${api_version}${endpoint}`);
@@ -128,18 +132,11 @@ async function fetchAPI(endpoint: string, options = {}) {
     return data;
   } catch (error) {
     console.error(`An error occurred while FETCHING check ${endpoint}`, error);
-    return null; // This needs to return the error somehow other than the console
+    throw new Error("Network error occurred while fetching data");
   }
 }
 
 export const apiService = {
-  healthCheck(isGraphQL: boolean) {
-    if (isGraphQL) {
-      return healthCheckGraphQL();
-    } else {
-      return fetchAPI("health");
-    }
-  },
   submitForm(isGraphQL: boolean, data: any) {
     if (isGraphQL) {
       return postGraphQL(mutation, data)
@@ -151,7 +148,9 @@ export const apiService = {
         })
         .catch((error) => {
           console.error("An error occurred:", error);
-          throw error;
+          throw new Error(
+            "Network error occurred while submitting form data with GraphQL API"
+          );
         });
     }
     return postAPI("posts", data);

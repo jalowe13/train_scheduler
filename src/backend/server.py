@@ -54,6 +54,7 @@ logger.info("You can access strawberry GraphQL playground at http://127.0.0.1:80
 # Setting up the FastAPI app
 app = FastAPI()
 
+# Testing functions
 # Helper functions for database connection
 def print_fetch(cursor):
     if cursor.description is not None:  # Check if there are results to fetch
@@ -143,21 +144,33 @@ def check_time_format(time: str):
 # %s is a placeholder for a paramater
 # Because 'sql_params' is a tuple, the SQL engine treats its values as data, not part of the SQL command.
 # This means that even if a value in 'sql_params' contains SQL commands, they will not be executed.
-def fetch_cache_or_db(cache, key, sql_query, sql_params):
-    # Fetch all keys from the cache
-    cached_keys = cache.keys()
-
-    # Check if the key is in the cache
-    if key in cached_keys:
+def fetch_cache_or_db(cache: KeyValueStore, key, sql_query, sql_params):
+    try:
+        # Fetch the key directly from the cache
+        data = cache.fetch(key) if cache else None
+    except Exception as e:
+        logger.error("Error fetching key from cache: " + str(e))
+        data = None
+    if data is not None:
         logger.info("Key found in cache")
-        data = cache.fetch(key)
-        logger.info(data)
-    else:
-        logger.info(f"{key} not found in cache")
+        return data
+    
+    # Key is not in cache, fetch from the database and insert into cache
+    logger.info(f"{key} not found in cache")
+    try:
         cursor.execute(sql_query, sql_params)
         data = cursor.fetchall()
+    except Exception as e:
+        logger.error("Error fetching data from the database: " + str(e))
+        raise HTTPException(status_code=500, detail=f"Internal server error: Failed to execute database query for the key {key}")
+
+    if data: # Data found in the database
+        logger.info("The data is:" + str(data)) 
         # Cache the result after doing database operation
         cache.set(key, data)
+    else: # No data found in the database
+        logger.error(f"No data found in the database for {key}")
+        raise HTTPException(status_code=404, detail=f"Data not found: No data found in the database for the key {key}")
 
     return data
 
@@ -187,12 +200,12 @@ def get_trains_at_time(arrival_timestamp: str) -> List[str]:
         FROM {DB_NAME} 
         WHERE TO_CHAR({ARRIVAL_TIME_COLUMN}, 'YYYY-MM-DD HH24:MI:SS') = %s
     """
-    trains = fetch_cache_or_db(kvs_arrival, arrival_timestamp, sql_query, (arrival_timestamp,))
-    if not trains:
-        error_detail = f"No trains found for time: '{arrival_timestamp}'"
-        logger.error(error_detail)
-        raise HTTPException(status_code=400, detail=error_detail)
-    else:
+    try:
+        trains = fetch_cache_or_db(kvs_arrival, arrival_timestamp, sql_query, (arrival_timestamp,))
+    except Exception as e:
+        logger.error(" get_trains_at_time Error detail " + str(e))
+        raise
+    if trains:
         logger.info("Trains found")
         train_names = [train_tuple[0] for train_tuple in trains]
     return train_names
@@ -212,7 +225,10 @@ def get_trains_next_multiple_times(arrival_timestamp: str) -> TrainArrival:
         ORDER BY arrival_time
         LIMIT 1
     """
-    result = fetch_cache_or_db(kvs_arrival_next_trains, time_to_query, sql_query, (time_to_query,))
+    try:
+        result = fetch_cache_or_db(kvs_arrival_next_trains, time_to_query, sql_query, (time_to_query,))
+    except HTTPException:
+        raise
     if not result:
         error_detail = f"No simultaneous trains found after time: '{arrival_timestamp}'"
         logger.error(error_detail)
@@ -247,6 +263,8 @@ def get_times_for_train(train_name: str) -> List[str]:
     
 # POST Requests for Graph and REST APIs
 def post_add_train(train_name: str, arrival_time: List[str]) -> Train:
+    if (len(train_name) == 0):
+        raise HTTPException(status_code=400, detail="No train name provided")
     if (len(arrival_time) == 0):
         raise HTTPException(status_code=400, detail="No arrival times provided")
     check_name_format(train_name)
@@ -264,12 +282,16 @@ def post_add_train(train_name: str, arrival_time: List[str]) -> Train:
         # Concatenate current date with arrival time
         arrival_timestamp = f"{current_date} {arrival_time_24h}"
         logger.info(f"arrival_timestamp: {arrival_timestamp}")
-        # TODO: Check if entry already exists in the Database before adding
+        # Check if the train with the same arrival time already exists
+        cursor.execute(f"""
+                SELECT * FROM {DB_NAME} WHERE {TRAIN_NAME_COLUMN} = %s AND {ARRIVAL_TIME_COLUMN} = %s;
+                """, (train_name, arrival_timestamp))
+        if cursor.fetchone() is not None:
+                raise HTTPException(status_code=409, detail=f"Train {train_name} with this arrival time already exists")
         cursor.execute(f"""
             INSERT INTO {DB_NAME} ({TIME_COLUMN}, {TRAIN_NAME_COLUMN}, {ARRIVAL_TIME_COLUMN}) 
             VALUES (NOW(),%s,%s );
             """, (train_name, arrival_timestamp))
-        select_name_time(cursor)
         total_rows_inserted += 1
     print(f"Total rows inserted: {total_rows_inserted}")
     return Train(train_name=train_name, arrival_time=arrival_time)
@@ -304,8 +326,6 @@ class Mutation:
         return post_add_train(train_name,arrival_time)
 
 
-# TODO: Delete database button
-
 # Setting up the GraphQL schema
 if USE_GRAPH:
     schema = strawberry.Schema(query=Query, mutation=Mutation)
@@ -332,6 +352,8 @@ class Post(BaseModel):
 # POST request to add a train
 @app.post("/api/v1/posts", response_model=Train)
 async def add_train(train: Train):
+    if len(train.train_name) == 0:
+        raise HTTPException(status_code=400, detail="No train name provided")
     if len(train.arrival_time) == 0:
         raise HTTPException(status_code=400, detail="No arrival times provided")
     logger.info(f"Adding train: {train.train_name}")
@@ -339,18 +361,15 @@ async def add_train(train: Train):
     train = post_add_train(train.train_name, train.arrival_time)
     return train
 
-# GET request to check if the server is running
-@app.get("/api/v1/health")
-async def health_check():
-    logger.info("Request at health check endpoint")
-    return {"status": "OK"}
+# GET requests for the REST API
 
 @app.get("/api/v1/trains/{train_name}/arrival-times")
 def read_times_for_train(train_name: str):
     try:
         return get_times_for_train(train_name)
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        status_code = getattr(e, 'status_code', 500)  # Use 500 as a default status code
+        raise HTTPException(status_code, detail=str(e))
     
 @app.get("/api/v1/times/{arrival_timestamp}/trains")
 def read_trains_at_time(arrival_timestamp: str):
@@ -358,12 +377,14 @@ def read_trains_at_time(arrival_timestamp: str):
         logger.info(f"Getting trains at time: {arrival_timestamp}")
         return get_trains_at_time(arrival_timestamp)
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        status_code = getattr(e, 'status_code', 500)  # Use 500 as a default status code
+        raise HTTPException(status_code, detail=str(e))
 @app.get("/api/v1/arrival-times/{arrival_timestamp}/multiple-trains")
 def read_trains_next_multiple_times(arrival_timestamp: str):
     try:
         return get_trains_next_multiple_times(arrival_timestamp)
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        status_code = getattr(e, 'status_code', 500)  # Use 500 as a default status code
+        raise HTTPException(status_code, detail=str(e))
 
 
