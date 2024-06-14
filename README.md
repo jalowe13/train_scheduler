@@ -1,6 +1,8 @@
 
 # Train Scheduler Project
 ![image](https://github.com/jalowe13/train_scheduler/assets/40873986/a92cc8bd-ca30-4774-abdf-7e90be55ec7f)
+![image](https://github.com/jalowe13/train_scheduler/assets/40873986/abe6a9fa-b7ca-4a9e-a51c-6f38b90f4741)
+
 
 # Problem Statement Breakdown
 # Context
@@ -15,70 +17,113 @@
 ○ The list of times when this particular train arrives at this station. These are specific to the minute the train arrives (i.e. ‘9:53 PM’)  
 ● A means for clients to get the next time multiple trains are going to be arriving at this station in the same minute. This request should accept a time value as an argument, and return a timestamp that reflects the next time two or more trains will arrive at this station simultaneously after the submitted time value.  
 
-
-
 Capability Restrictions
 - Train Line name 4 char limit e.g. ‘EWR0’, ‘ALP5’, ‘TOMO’, etc)  
 - Arrival times to the minute 9:53pm
 - Request for multiple trains arriving in  the same minute
 	- Input time value
 	- Return time Next time two or more trains arrive at the same time after the submitted time value
-# Some other behavior assumptions:  
-○ You can assume that all trains have the same schedule each day (i.e. no special schedules for weekends and holidays).  
-○ If there are no remaining times after the passed-in time value when multiple trains will be in the station simultaneously, the service should return the first time of the day when multiple trains arrive at the station simultaneously (since that’s when it’ll first happen tomorrow).  
-○ If there are no instances when multiple trains are in the station at the same time, this method should return no time.  
-○ You may define the API contract for this service however you wish, including the format used for accepting and returning time arguments. The endpoint should return a 200 response for valid requests, and a 4xx request for invalid requests (with actual HTTP code at your discretion).
-# Service State  
-### This web service has a key-value store for keeping state, with the following calls and characteristics:  
-● You can call the db.set(key, value) method (with syntax adapted to the language of your choosing) to set the value associated with a key.  
-○ This method can accept any object type as ‘value’, and does not return a value (unless the language you’re using mandates a return type, in which case use your discretion and state your assumption).  
-○ You can call the db.fetch(key) method (with syntax adapted to the language of your choosing) to retrieve the object set at a key.  This method returns the object set at that key if the key is defined, undefined if not.  
-● You can call the db.keys() method (with syntax adapted to the language of your choosing) to return the list of all defined keys in the database. This function returns an empty list if none have been defined.  
-● This key-value store is thread-safe.  The service needs to use this hypothetical key-value store (with only these three methods available).
-### Expectations and Assumptions  
-● You can use whatever language, framework, and tools you feel most comfortable with.  
-● You can use whatever schema and data types for the service endpoints that you feel makes the most sense.  
-● You can use whatever dependencies are useful to solve the problem.  
-● You do not need to worry about user authentication or accreditation as part of the prompt. All endpoints can be public to anonymous users.  
-● You may mock out the implementation of the key-value store endpoints however it makes sense to test/validate/compile your implementation. (Or not at all. It’s acceptable if the service does not run for lack of an implementation for the DB interface methods).  
-● It’s OK to make additional assumptions that aren’t encoded in this prompt – just be sure to document them.  
-● You may ask any questions you need to pursue this prompt, including questions to clarify assumptions around performance requirements, scale, etc.
 
 
 # My Approach
 ## Front-End
-React
-ANT UED
-### Back-End
-Electron for Framework
-Python with FastAPI, (ASGI to serve ) for designing the GraphQL (with Strawberry to define type schema) and REST APIs
+### React
+For all web server requests, I use the built-in JavaScript Fetch API
+React handles use states and are efficient with state-based rendering and component-based architecture
+### ANT UED
+For usage as a component library for UI elements for speed of development
+![image](https://github.com/jalowe13/train_scheduler/assets/40873986/42bce0db-1e1e-4755-848f-45ebe0183a2f)
+
+## Back-End
+### Framework Choice
+#### Electron
+For usage of hosting web applications separate from a web browser environment in its own contained window. Useful for creating web apps.
+Popular web applications that use this specific framework include Discord, Slack, Visual Studio Code
+
+![image](https://github.com/jalowe13/train_scheduler/assets/40873986/cad7fb56-3ac9-491e-a8c2-24d809515504)
+
+### Language Choice
+#### Python
+For fast development of backend web application services. Usually doesn't offer type safety like C++ but this can be fixed with the typing package (Specifically used this for the List Type for List of strings List[str])
+#### Uvicorn ASGI Server
+For async communication between the client and the server to allow multiple long-lived connections at once and hot reloading
+#### Node.js
+For scripting and automation of scripts to run the frontend and backend on command
+
+![image](https://github.com/jalowe13/train_scheduler/assets/40873986/054003b1-490c-4686-ba9d-126b3dee5e5a)
+
+### Data Storage Choice
+#### Key-Value Pairs
+Key Value Pairs are required and I will be using them specifically for caching as I wanted to dive deeper into how databases work, especially relational databases.
+KVP.keys() is implemented but not used due to the implementation. Scenarios to use keys would be doing an operation over the whole data set
+
+#### Relational Database
 Docker container with TimescaleDB
-## API Choice
+- For my relational database, I chose TimescaleDB. It extends off PostgreSQL and is used for large datasets of timestamped data and includes optimizations using hyper tables for this type of data. It's an API that is usable in the basic sense for SQL queries but can also be learned through further project research.
+Docker container for isolation and containerization
+
+Why Relational?
+- For handling structured data such as train name and time, and relating one set or column of data to another.
+- SQL for complex queries
+```sql
+    sql_query = f"""
+        SELECT DATE_TRUNC('minute', {ARRIVAL_TIME_COLUMN}) as arrival_time,ARRAY_AGG({TRAIN_NAME_COLUMN})
+        FROM {DB_NAME}
+        WHERE {ARRIVAL_TIME_COLUMN} > %s
+        GROUP BY arrival_time
+        HAVING COUNT({TRAIN_NAME_COLUMN}) > 1
+        ORDER BY arrival_time
+        LIMIT 1
+    """
+```
+- Round time to the minute
+- Aggregate Train Names into a single array
+- Get the times after the arrival timestamp %s
+- Only filter trains with multiple arrival times
+- Order by the arrival time after %s
+- Only return 1 group 
+
+- Indexing, or composite indexes to speed up queries (Mentioned in TimescaleDB documentation)
+	- Ex: Tuple of train time and arrival time
+
+```sql
+cursor.execute(f"CREATE INDEX {NAME_IDX} ON {DB_NAME} ({TRAIN_NAME_COLUMN}, {ARRIVAL_TIME_COLUMN} DESC);")
+```
+Indexing 
+
+### API Choice
+
+[FastAPI | 🍓 Strawberry GraphQL](https://strawberry.rocks/docs/integrations/fastapi#options)
+
+[GraphQL - FastAPI (tiangolo.com)](https://fastapi.tiangolo.com/how-to/graphql/)
+
+![image](https://github.com/jalowe13/train_scheduler/assets/40873986/cf7e19bf-6918-4f17-9b61-bca358516b95)
+
+
+For designing the [[GraphQL]] (with Strawberry to define type schema) and [[REST]] [[API]]
+
+Note:
+GraphQL always returns 400 when it receives a process. Throwing 200 in the body response of the message
+
 Deciding between GraphQL and REST. 
 - GraphQL is good for many complex queries and is more complex than REST and handles under and over-fetching better. It also puts everything into a singular endpoint that is parsed.
 - REST is Simple and straight forward and a good, scalable API choice
 - I compare the server response timings between both in this project
 
-# Database choice
-- Key Value Pairs are required and I will be using them specifically for caching as I wanted to dive deeper into how databases work, especially relational databases.
-- For my relational database I chose TimescaleDB. It extends off PostgreSQL and is used for large datasets of timestamped data and includes optimizations using hyper tables for this type of data. It's an API that is usable in the basic sense for SQL queries but can also be learned through further project research.
-
-# Optimization Strategies
+## Optimization Strategies
 - On GET requests either from REST or GraphQL if a train name or time set is not in a key-value pair dictionary it will be added to one for caching purposes
 - 3 Caches are used to minimize expensive Database calls
 - Instance 1 - Key - Arrival Time, Value - List of Train Names
 - Instance 2 - Key - Train Name, Value - List of Arrival Times
 -  Instance 3 - Key - Arrival Time, Value - Closest Next Multiple Trains
 
-[GraphQL - FastAPI (tiangolo.com)](https://fastapi.tiangolo.com/how-to/graphql/)
-[FastAPI | 🍓 Strawberry GraphQL](https://strawberry.rocks/docs/integrations/fastapi#options)
-Python Env managed by Conda
-[Timescale Documentation | Install TimescaleDB from Docker container](https://docs.timescale.com/self-hosted/latest/install/installation-docker/)
-[Timescale Documentation | Tables and hypertables](https://docs.timescale.com/getting-started/latest/tables-hypertables/)
 
-Note:
-GraphQL always returns 400 when it receives a process. Throwing 200 in the body response of the message
+## For Improvements 
+- The APIS can be more generalized
+- Flask can help with smaller applications and minimizing component usage
+- Django can help with load balancing if it becomes big and complex enough
 
+Q: GraphQL and security?
 # Tests 
 ## PUSH Request of 1 Train Schedule with 4 times
 ![image](https://github.com/jalowe13/train_scheduler/assets/40873986/26b142de-e349-4713-9f85-13ed522b83b1)
@@ -97,9 +142,9 @@ REST better on GET
 - [1-4] GraphQL Outputs for 2 Queuing Train at Time and 2 for queueing multiple trains after time
 - [5-8] REST Outputs for 2 Queuing Train at Time and 2 for queueing multiple trains after time
 
-## REST is better for smaller less complex Queries and is prefered over GraphQl because REST has a 50% reduction in response time from the server. When there are more database queries and entries that are needed this reduction is crucial.
+## REST is better for smaller less complex Queries and is preferred over GraphQl because REST has a 50% reduction in response time from the server. When there are more database queries and entries that are needed this reduction is crucial.
 
-This could be due to needing to parse the query statement. Once there's more complex data requirements and a potential for over and under-fetching, GraphQL would be preferred over REST. 
+This could be due to needing to parse the query statement. Once there are more complex data requirements and a potential for over and under-fetching, GraphQL would be preferred over REST. 
 
 ## Example Queries 
 ## Trains at specific time
